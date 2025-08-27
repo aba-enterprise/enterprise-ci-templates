@@ -14,12 +14,6 @@ on:
         required: false
         type: string
         default: ''
-        
-permissions:
-  actions: read
-  contents: read
-  packages: write
-  security-events: write
 
 jobs:
   build:
