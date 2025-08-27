@@ -14,6 +14,14 @@ on:
         required: false
         type: string
         default: ''
+      run-sonarqube:
+        required: false
+        type: string
+        default: 'false'
+      run-veracode:
+        required: false
+        type: string
+        default: 'false'
 
 jobs:
   build:
@@ -50,7 +58,6 @@ jobs:
         else
           echo "No test projects found; skipping."
         fi
-
     - name: Log in to GitHub Container Registry
       if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' }}
       run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -58,5 +65,43 @@ jobs:
     - name: Build Docker image
       if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' }}
       run: |
-        docker build -t ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:latest \
-          --file ${{ inputs.dockerfile-path }} .
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:latest \
+            --file ${{ inputs.dockerfile-path }} .
+
+# --- SonarQube Integration ---
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run-sonarqube == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Run SonarQube
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet sonarscanner begin /k:"your_project_key" /d:sonar.login="${SONAR_TOKEN}" /d:sonar.host.url="https://your-sonarqube-server"
+          dotnet build ${{ inputs.project-path }}
+          dotnet sonarscanner end /d:sonar.login="${SONAR_TOKEN}"
+
+# --- Veracode Integration ---
+  veracode:
+    name: Veracode Scan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run-veracode == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Run Veracode
+        env:
+          VERACODE_API_ID: ${{ secrets.VERACODE_API_ID }}
+          VERACODE_API_KEY: ${{ secrets.VERACODE_API_KEY }}
+        run: |
+          curl -O https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
+          unzip pipeline-scan-LATEST.zip -d veracode
+          java -jar veracode/pipeline-scan.jar \
+            -vid $VERACODE_API_ID \
+            -vkey $VERACODE_API_KEY \
+            -f ./path-to-artifact.zip \
+            --project-name "your-project-name"
