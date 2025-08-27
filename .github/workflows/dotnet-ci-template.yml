@@ -1,0 +1,62 @@
+name: Reusable CI/CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      project-path:
+        required: true
+        type: string
+      dockerfile-path:
+        required: false
+        type: string
+        default: ''
+      image-name:
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ inputs.project-path }}
+
+    - name: Build
+      run: dotnet build ${{ inputs.project-path }} -c Release --no-restore
+
+    - name: Test (auto-discover *Tests.csproj)
+      run: |
+        set -euo pipefail
+        if git ls-files '*Tests.csproj' >/dev/null 2>&1; then
+          while IFS= read -r t; do
+              echo "Running tests: $t"
+              dotnet test "$t" -c Release --no-build --logger trx
+          done < <(git ls-files '*Tests.csproj')
+        else
+          echo "No test projects found; skipping."
+        fi
+
+    - name: Log in to GitHub Container Registry
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' }}
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build Docker image
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' }}
+      run: |
+        docker build -t ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}:latest \
+          --file ${{ inputs.dockerfile-path }} .
