@@ -26,6 +26,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsECRPushRole
+
     permissions:
       id-token: write       # ✅ Needed for OIDC with AWS
       contents: read
@@ -65,7 +68,7 @@ jobs:
       if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsECRPushRole
+        role-to-assume: ${{ env.AWS_ROLE_ARN }}
         aws-region: ${{ inputs.aws-region }}
 
     # ✅ Login to Amazon ECR
