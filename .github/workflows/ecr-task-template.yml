@@ -38,24 +38,24 @@ jobs:
   register-task:
     runs-on: ubuntu-latest
 
-    env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
-
     permissions:
       id-token: write
       contents: read
 
     steps:
+      # ✅ Configure AWS with ECS Deploy Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
+          audience: sts.amazonaws.com
 
+      # ✅ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: |
-          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          IMAGE_TAG=${{ github.sha }}
+          # IMAGE_TAG=${{ github.sha }}
+          IMAGE_TAG="65614655e5454ccd3f2628f762f4f9753c6935ba"
           ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
@@ -64,7 +64,7 @@ jobs:
           {
             "family": "${{ inputs.task-family }}",
             "networkMode": "awsvpc",
-            "executionRoleArn": "arn:aws:iam::$AWS_ACCOUNT_ID:role/ecsTaskExecutionRole",
+            "executionRoleArn": "arn:aws:iam::${{ inputs.aws-accountid }}:role/ecsTaskExecutionRole",
             "containerDefinitions": [
               {
                 "name": "${{ inputs.container-name }}",
@@ -72,7 +72,6 @@ jobs:
                 "portMappings": [
                   {
                     "containerPort": 80,
-                    "hostPort": 80,
                     "protocol": "tcp"
                   }
                 ],

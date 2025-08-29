@@ -36,20 +36,19 @@ on:
 jobs:
   deploy-service:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
-
+    
     permissions:
       id-token: write
       contents: read
 
     steps:
+      # ✅ Configure AWS with ECS Deploy Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
+          audience: sts.amazonaws.com
 
       - name: Create or Update ECS Service
         run: |
