@@ -1,0 +1,89 @@
+name: Reusable ECS Task Definition
+
+on:
+  workflow_call:
+    inputs:
+      cluster-name:
+        description: "ECS Cluster Name"
+        required: true
+        type: string
+      task-family:
+        description: "Task Definition Family"
+        required: true
+        type: string
+      container-name:
+        description: "Container Name"
+        required: true
+        type: string
+      ecr-repo:
+        description: "ECR Repository Name"
+        required: true
+        type: string
+      cpu:
+        description: "Task CPU Units"
+        required: false
+        type: string
+        default: "256"
+      memory:
+        description: "Task Memory (MiB)"
+        required: false
+        type: string
+        default: "512"
+      aws-accountid:
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  register-task:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+
+      - name: Register ECS Task Definition
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_TAG=${{ github.sha }}
+          ECR_IMAGE=${AWS_ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
+
+          echo "Registering ECS Task Definition for $ECR_IMAGE"
+
+          cat <<EOF > task-def.json
+          {
+            "family": "${{ inputs.task-family }}",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::$AWS_ACCOUNT_ID:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "${{ inputs.container-name }}",
+                "image": "$ECR_IMAGE",
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "hostPort": 80,
+                    "protocol": "tcp"
+                  }
+                ],
+                "essential": true
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "${{ inputs.cpu }}",
+            "memory": "${{ inputs.memory }}"
+          }
+          EOF
+
+          aws ecs register-task-definition \
+            --cli-input-json file://task-def.json
