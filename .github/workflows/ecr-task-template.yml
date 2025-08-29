@@ -56,7 +56,7 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           IMAGE_TAG=${{ github.sha }}
-          ECR_IMAGE=${AWS_ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
+          ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
 
