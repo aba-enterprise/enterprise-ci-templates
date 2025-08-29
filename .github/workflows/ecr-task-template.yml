@@ -55,7 +55,7 @@ jobs:
       - name: Register ECS Task Definition
         run: |
           # IMAGE_TAG=${{ github.sha }}
-          IMAGE_TAG="65614655e5454ccd3f2628f762f4f9753c6935ba"
+          IMAGE_TAG="b339ecf63426ea839c03b67df8ff9bb12fa8ab23"
           ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
