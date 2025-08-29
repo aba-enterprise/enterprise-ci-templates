@@ -22,12 +22,16 @@ on:
         required: false
         type: string
         default: ''
+      aws-accountid:
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsECRPushRole
+      AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
 
     permissions:
       id-token: write       # ✅ Needed for OIDC with AWS
