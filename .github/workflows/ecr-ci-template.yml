@@ -90,7 +90,7 @@ jobs:
         IMAGE_TAG=latest
         COMMIT_TAG=${{ github.sha }}
 
-        echo "Building image..."
+        echo "Building image with tags: $IMAGE_TAG, $COMMIT_TAG..."
         docker build -t $ECR_REGISTRY/$ECR_REPO:${IMAGE_TAG} \
                      -t $ECR_REGISTRY/$ECR_REPO:${COMMIT_TAG} \
                      -f ${{ inputs.dockerfile-path }} .
