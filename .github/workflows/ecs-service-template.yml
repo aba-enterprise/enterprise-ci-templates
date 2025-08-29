@@ -74,3 +74,4 @@ jobs:
               --launch-type FARGATE \
               --network-configuration "awsvpcConfiguration={subnets=[${{ inputs.subnets }}],securityGroups=[${{ inputs.security-groups }}],assignPublicIp=ENABLED}"
           fi
+ 
