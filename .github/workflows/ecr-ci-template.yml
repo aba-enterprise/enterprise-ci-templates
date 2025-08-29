@@ -1,0 +1,93 @@
+name: Reusable ECR CI/CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      project-path:
+        required: true
+        type: string
+      dockerfile-path:
+        required: false
+        type: string
+        default: ''
+      image-name:
+        required: false
+        type: string
+        default: ''
+      aws-region:
+        required: false
+        type: string
+        default: 'us-east-2'   # Ohio region
+      ecr-repo:
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write       # ✅ Needed for OIDC with AWS
+      contents: read
+      packages: write
+      security-events: write
+      actions: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ inputs.project-path }}
+
+    - name: Build
+      run: dotnet build ${{ inputs.project-path }} -c Release --no-restore
+
+    - name: Test (auto-discover *Tests.csproj)
+      run: |
+        set -euo pipefail
+        if git ls-files '*Tests.csproj' >/dev/null 2>&1; then
+          while IFS= read -r t; do
+              echo "Running tests: $t"
+              dotnet test "$t" -c Release --no-build --logger trx
+          done < <(git ls-files '*Tests.csproj')
+        else
+          echo "No test projects found; skipping."
+        fi
+
+    # ✅ Configure AWS credentials using OIDC
+    - name: Configure AWS Credentials
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsECRPushRole
+        aws-region: ${{ inputs.aws-region }}
+
+    # ✅ Login to Amazon ECR
+    - name: Login to Amazon ECR
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # ✅ Build, Tag, and Push to ECR
+    - name: Build and Push Docker image to ECR
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      run: |
+        ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+        ECR_REPO=${{ inputs.ecr-repo }}
+        IMAGE_TAG=latest
+        COMMIT_TAG=${{ github.sha }}
+
+        echo "Building image..."
+        docker build -t $ECR_REGISTRY/$ECR_REPO:${IMAGE_TAG} \
+                     -t $ECR_REGISTRY/$ECR_REPO:${COMMIT_TAG} \
+                     -f ${{ inputs.dockerfile-path }} .
+
+        echo "Pushing image to ECR..."
+        docker push $ECR_REGISTRY/$ECR_REPO:${IMAGE_TAG}
+        docker push $ECR_REGISTRY/$ECR_REPO:${COMMIT_TAG}
