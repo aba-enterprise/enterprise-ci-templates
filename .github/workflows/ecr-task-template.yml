@@ -75,7 +75,14 @@ jobs:
                     "protocol": "tcp"
                   }
                 ],
-                "essential": true
+                "essential": true,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/${{ inputs.task-family }}",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
               }
             ],
             "requiresCompatibilities": ["FARGATE"],
