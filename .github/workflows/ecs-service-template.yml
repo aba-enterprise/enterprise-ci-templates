@@ -32,10 +32,16 @@ on:
         required: false
         type: string
         default: ''
+      environment:        # ✅ new input
+        required: true
+        type: string
+        default: ''
 
 jobs:
   deploy-service:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}   # ✅ dynamic
     
     permissions:
       id-token: write
