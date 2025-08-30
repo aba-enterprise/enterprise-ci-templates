@@ -54,7 +54,7 @@ jobs:
       # ✅ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: |
-          IMAGE_TAG="cf8cdb795b79ee9a56361d7d9404d5d728bafc13"
+          IMAGE_TAG="f4ecea78a7ddbc9e7e02b656cd503b7b93b9f764"
           ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
