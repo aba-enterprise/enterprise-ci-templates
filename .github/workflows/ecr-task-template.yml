@@ -78,7 +78,7 @@ jobs:
                 "logConfiguration": {
                   "logDriver": "awslogs",
                   "options": {
-                    "awslogs-group": "${{ inputs.task-family }}",
+                    "awslogs-group": "/ecs/${{ inputs.task-family }}",
                     "awslogs-region": "us-east-2",
                     "awslogs-stream-prefix": "ecs"
                   }
