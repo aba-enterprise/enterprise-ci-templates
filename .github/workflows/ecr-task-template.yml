@@ -54,7 +54,6 @@ jobs:
       # ✅ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: |
-          # IMAGE_TAG=${{ github.sha }}
           IMAGE_TAG="cf8cdb795b79ee9a56361d7d9404d5d728bafc13"
           ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:$IMAGE_TAG
 
@@ -83,6 +82,7 @@ jobs:
                     "awslogs-region": "us-east-2",
                     "awslogs-stream-prefix": "ecs"
                   }
+                }
               }
             ],
             "requiresCompatibilities": ["FARGATE"],
@@ -93,3 +93,4 @@ jobs:
 
           aws ecs register-task-definition \
             --cli-input-json file://task-def.json
+
