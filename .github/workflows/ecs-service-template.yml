@@ -32,7 +32,7 @@ on:
         required: false
         type: string
         default: ''
-      environment:        # ✅ new input
+      environment:
         required: true
         type: string
         default: ''
@@ -41,7 +41,7 @@ jobs:
   deploy-service:
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment }}   # ✅ dynamic
+      name: ${{ inputs.environment }}
     
     permissions:
       id-token: write
@@ -56,8 +56,9 @@ jobs:
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
-      - name: Create or Update ECS Service
+      - name: Create or Update ECS Service ${{ inputs.environment }}
         run: |
+          echo "Deploying to environment: ${{ inputs.environment }}"
           CLUSTER_NAME=${{ inputs.cluster-name }}
           SERVICE_NAME=${{ inputs.service-name }}
           TASK_FAMILY=${{ inputs.task-family }}
