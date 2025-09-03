@@ -32,3 +32,20 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{matrix.language}}"
+      
+      - name: Check for high/medium findings
+        run: |
+            gh code-scanning alert list \
+            --repo $GITHUB_REPOSITORY \
+            --ref $GITHUB_SHA \
+            --severity error,warning \
+            --state open \
+            --json rule,severity > alerts.json
+
+            if [ $(jq '. | length' alerts.json) -gt 0 ]; then
+            echo "❌ Found medium/high CodeQL findings. Failing pipeline."
+            cat alerts.json
+            exit 1
+            fi
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
