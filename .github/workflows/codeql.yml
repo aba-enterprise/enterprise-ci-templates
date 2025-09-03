@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        language: ${{ inputs.languages }}
+        language:
+            - ${{ inputs.languages }} 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
