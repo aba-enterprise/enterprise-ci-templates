@@ -1,52 +1,65 @@
-name: "CodeQL Scan"
+name: "Reusable Build and CodeQL Scan"
 
 on:
   workflow_call:
     inputs:
-      languages:
+      project-path:
         required: true
         type: string
+      dotnet-version:
+        required: false
+        type: string
+        default: "8.0.x"
 
 permissions:
   security-events: write
-  actions: read
   contents: read
+  actions: read
 
 jobs:
-  analyze:
+  codeql-scan:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        language:
-            - ${{ inputs.languages }} 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Build application
+        run: dotnet publish ${{ inputs.project-path }} -c Release -o output
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
-      
+          languages: csharp
+
       - name: Perform CodeQL Analysis
-        id: analyze
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{matrix.language}}"
-      
+          category: "/language:csharp"
+
       - name: Check for high/medium findings
         run: |
-            gh code-scanning alert list \
+          gh code-scanning alert list \
             --repo $GITHUB_REPOSITORY \
             --ref $GITHUB_SHA \
             --severity error,warning \
             --state open \
             --json rule,severity > alerts.json
 
-            if [ $(jq '. | length' alerts.json) -gt 0 ]; then
+          if [ $(jq '. | length' alerts.json) -gt 0 ]; then
             echo "❌ Found medium/high CodeQL findings. Failing pipeline."
             cat alerts.json
             exit 1
-            fi
+          fi
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-build
+          path: output/
