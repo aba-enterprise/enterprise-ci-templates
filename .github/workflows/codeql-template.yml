@@ -52,16 +52,18 @@ jobs:
       # Handle manual build (if requested)
       - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
         run: |
-          echo "⚙️ Running manual build for C#"
-          dotnet build **/*.csproj -c Release
+          echo "⚙️ Running manual build & publish for C#"
+          dotnet publish **/*.csproj -c Release -o output
 
       # Run CodeQL Analysis
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
-      
+
+      # Upload artifacts (only for csharp builds that produced output/)
       - name: Upload build artifacts
+        if: matrix.language == 'csharp'
         uses: actions/upload-artifact@v4
         with:
           name: dotnet-build
