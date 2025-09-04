@@ -50,6 +50,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+    - name: Check Variable
+      run: |
+        echo "AWS account number - ${{ inputs.aws-accountid }} "
+        echo "AWS_ROLE_ARN=$AWS_ROLE_ARN"
 
     # - name: Setup .NET
     #   uses: actions/setup-dotnet@v3
