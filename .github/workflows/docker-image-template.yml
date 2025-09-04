@@ -18,14 +18,10 @@ on:
         required: false
         type: string
         default: 'us-east-2'
-      ecr-repo:
-        required: false
-        type: string
-        default: ''
-      aws-accountid:
-        required: false
-        type: string
-        default: ''
+      # ecr-repo:
+      #   required: false
+      #   type: string
+      #   default: ''
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
@@ -39,6 +35,7 @@ jobs:
       name: ${{ inputs.environment }}
     env:
       AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
+      # AWS_ECR_REPO: ${{ vars.AWS_ECR_REPO }}
 
     permissions:
       id-token: write
@@ -88,7 +85,7 @@ jobs:
 
     # ✅ Configure AWS credentials using OIDC
     - name: Configure AWS Credentials
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -96,13 +93,13 @@ jobs:
 
     # ✅ Login to Amazon ECR
     - name: Login to Amazon ECR
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     # ✅ Build, Tag, and Push to ECR
     - name: Build and Push Docker image to ECR
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && inputs.ecr-repo != '' }}
+      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
       run: |
         ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
         ECR_REPO=${{ inputs.ecr-repo }}
