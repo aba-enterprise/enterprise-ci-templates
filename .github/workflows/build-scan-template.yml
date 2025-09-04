@@ -35,6 +35,8 @@ jobs:
       - name: Install GitHub CLI Extensions
         run: |
           gh extension install github/gh-code-scanning
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       # ✅ Initialize CodeQL with input variable
       - name: Initialize CodeQL
