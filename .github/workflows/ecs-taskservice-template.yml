@@ -1,0 +1,147 @@
+name: Reusable ECS Task + Service Deployment
+
+on:
+  workflow_call:
+    inputs:
+      cluster-name:
+        description: "ECS Cluster Name"
+        required: true
+        type: string
+      service-name:
+        description: "ECS Service Name"
+        required: true
+        type: string
+      task-family:
+        description: "Task Definition Family"
+        required: true
+        type: string
+      container-name:
+        description: "Container Name"
+        required: true
+        type: string
+      ecr-repo:
+        description: "ECR Repository Name"
+        required: true
+        type: string
+      subnets:
+        description: "Comma-separated list of Subnet IDs"
+        required: true
+        type: string
+      security-groups:
+        description: "Comma-separated list of Security Group IDs"
+        required: true
+        type: string
+      desired-count:
+        description: "Number of tasks"
+        required: false
+        type: string
+        default: "1"
+      cpu:
+        description: "Task CPU Units"
+        required: false
+        type: string
+        default: "256"
+      memory:
+        description: "Task Memory (MiB)"
+        required: false
+        type: string
+        default: "512"
+      aws-accountid:
+        required: true
+        type: string
+      image-tag:
+        description: "ECR image tag (commit SHA or latest)"
+        required: true
+        type: string
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
+
+jobs:
+  ecs-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # ✅ Configure AWS with ECS Deploy Role
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+          audience: sts.amazonaws.com
+
+      # ✅ Register ECS Task Definition
+      - name: Register ECS Task Definition
+        run: |
+          ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:${{ inputs.image-tag }}
+
+          echo "Registering ECS Task Definition for $ECR_IMAGE"
+
+          cat <<EOF > task-def.json
+          {
+            "family": "${{ inputs.task-family }}",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ inputs.aws-accountid }}:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "${{ inputs.container-name }}",
+                "image": "$ECR_IMAGE",
+                "portMappings": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "tcp"
+                  }
+                ],
+                "essential": true,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/${{ inputs.task-family }}",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "${{ inputs.cpu }}",
+            "memory": "${{ inputs.memory }}"
+          }
+          EOF
+
+          aws ecs register-task-definition \
+            --cli-input-json file://task-def.json
+
+      # ✅ Create or Update ECS Service
+      - name: Create or Update ECS Service ${{ inputs.environment }}
+        run: |
+          CLUSTER_NAME=${{ inputs.cluster-name }}
+          SERVICE_NAME=${{ inputs.service-name }}
+          TASK_FAMILY=${{ inputs.task-family }}
+
+          echo "Deploying to cluster=$CLUSTER_NAME service=$SERVICE_NAME task=$TASK_FAMILY"
+
+          if aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].status' --output text | grep -q "ACTIVE"; then
+            echo "Updating existing ECS service..."
+            aws ecs update-service \
+              --cluster $CLUSTER_NAME \
+              --service $SERVICE_NAME \
+              --task-definition $TASK_FAMILY
+          else
+            echo "Creating new ECS service..."
+            aws ecs create-service \
+              --cluster $CLUSTER_NAME \
+              --service-name $SERVICE_NAME \
+              --task-definition $TASK_FAMILY \
+              --desired-count ${{ inputs.desired-count }} \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${{ inputs.subnets }}],securityGroups=[${{ inputs.security-groups }}],assignPublicIp=ENABLED}"
+          fi
