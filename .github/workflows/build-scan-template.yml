@@ -10,6 +10,9 @@ on:
         required: false
         type: string
         default: "8.0.x"
+      languages:
+        required: true
+        type: string
 
 permissions:
   security-events: write
@@ -23,23 +26,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (only if dotnet project)
+        if: contains(inputs.languages, 'csharp')
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
-      - name: Build application
-        run: dotnet publish ${{ inputs.project-path }} -c Release -o output
-
+      # ✅ Initialize CodeQL with input variable
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: csharp
+          languages: ${{ inputs.languages }}
 
+      # ✅ Build inside CodeQL context
+      - name: Build application
+        if: contains(inputs.languages, 'csharp')
+        run: dotnet build ${{ inputs.project-path }} -c Release
+
+      - name: Publish application
+        if: contains(inputs.languages, 'csharp')
+        run: dotnet publish ${{ inputs.project-path }} -c Release -o output
+
+      # ✅ Dynamic category
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:csharp"
+          category: "/language:${{ inputs.languages }}"
 
       - name: Check for high/medium findings
         run: |
@@ -59,6 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
+        if: contains(inputs.languages, 'csharp')
         uses: actions/upload-artifact@v4
         with:
           name: dotnet-build
