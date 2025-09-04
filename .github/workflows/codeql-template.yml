@@ -50,9 +50,10 @@ jobs:
           build-mode: ${{ inputs.build-mode }}
 
       # Handle manual build (if requested)
-      - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
+      # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
+      - name: Publish code
         run: |
-          echo "⚙️ Running manual build & publish for C#"
+          # echo "⚙️ Running manual build & publish for C#"
           dotnet publish **/*.csproj -c Release -o output
 
       # Run CodeQL Analysis
