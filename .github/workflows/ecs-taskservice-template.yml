@@ -3,10 +3,10 @@ name: Reusable ECS Task + Service Deployment
 on:
   workflow_call:
     inputs:
-      cluster-name:
-        description: "ECS Cluster Name"
-        required: true
-        type: string
+      # cluster-name:
+      #   description: "ECS Cluster Name"
+      #   required: true
+      #   type: string
       service-name:
         description: "ECS Service Name"
         required: true
@@ -19,18 +19,18 @@ on:
         description: "Container Name"
         required: true
         type: string
-      ecr-repo:
-        description: "ECR Repository Name"
-        required: true
-        type: string
-      subnets:
-        description: "Comma-separated list of Subnet IDs"
-        required: true
-        type: string
-      security-groups:
-        description: "Comma-separated list of Security Group IDs"
-        required: true
-        type: string
+      # ecr-repo:
+      #   description: "ECR Repository Name"
+      #   required: true
+      #   type: string
+      # subnets:
+      #   description: "Comma-separated list of Subnet IDs"
+      #   required: true
+      #   type: string
+      # security-groups:
+      #   description: "Comma-separated list of Security Group IDs"
+      #   required: true
+      #   type: string
       desired-count:
         description: "Number of tasks"
         required: false
@@ -46,13 +46,13 @@ on:
         required: false
         type: string
         default: "512"
-      aws-accountid:
-        required: true
-        type: string
-      image-tag:
-        description: "ECR image tag (commit SHA or latest)"
-        required: true
-        type: string
+      # aws-accountid:
+      #   required: true
+      #   type: string
+      # image-tag:
+      #   description: "ECR image tag (commit SHA or latest)"
+      #   required: true
+      #   type: string
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
@@ -81,7 +81,7 @@ jobs:
       # ✅ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: |
-          ECR_IMAGE=${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:${{ inputs.image-tag }}
+          ECR_IMAGE=${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
 
@@ -123,7 +123,7 @@ jobs:
       # ✅ Create or Update ECS Service
       - name: Create or Update ECS Service ${{ inputs.environment }}
         run: |
-          CLUSTER_NAME=${{ inputs.cluster-name }}
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME=${{ inputs.service-name }}
           TASK_FAMILY=${{ inputs.task-family }}
 
