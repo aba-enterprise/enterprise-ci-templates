@@ -10,10 +10,10 @@ on:
         required: false
         type: string
         default: ''
-      image-name:
-        required: false
-        type: string
-        default: ''
+      # image-name:
+      #   required: false
+      #   type: string
+      #   default: ''
       aws-region:
         required: false
         type: string
@@ -85,7 +85,7 @@ jobs:
 
     # ✅ Configure AWS credentials using OIDC
     - name: Configure AWS Credentials
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
+      if: ${{ inputs.dockerfile-path != ''  && vars.AWS_ECR_REPO != '' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -93,13 +93,13 @@ jobs:
 
     # ✅ Login to Amazon ECR
     - name: Login to Amazon ECR
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
+      if: ${{ inputs.dockerfile-path != ''  && vars.AWS_ECR_REPO != '' }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     # ✅ Build, Tag, and Push to ECR
     - name: Build and Push Docker image to ECR
-      if: ${{ inputs.dockerfile-path != '' && inputs.image-name != '' && vars.AWS_ECR_REPO != '' }}
+      if: ${{ inputs.dockerfile-path != ''  && vars.AWS_ECR_REPO != '' }}
       run: |
         ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
         ECR_REPO=${{ inputs.ecr-repo }}
