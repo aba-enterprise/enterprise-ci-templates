@@ -32,12 +32,9 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
       
-      - name: Install GitHub CLI + Extensions
+      - name: Install GitHub CLI Extensions
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gh jq
           gh extension install github/gh-code-scanning
-
 
       # ✅ Initialize CodeQL with input variable
       - name: Initialize CodeQL
@@ -75,8 +72,7 @@ jobs:
             exit 1
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
         if: contains(inputs.languages, 'csharp')
