@@ -49,10 +49,11 @@ on:
       # aws-accountid:
       #   required: true
       #   type: string
-      # image-tag:
-      #   description: "ECR image tag (commit SHA or latest)"
-      #   required: true
-      #   type: string
+      image-tag:
+        description: "ECR image tag (commit SHA or latest)"
+        required: true
+        type: string
+        default: 'latest'
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
