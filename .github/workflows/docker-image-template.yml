@@ -99,7 +99,7 @@ jobs:
 
         echo "Building image with tags: $IMAGE_TAG, $COMMIT_TAG..."
         docker build \
-          --build-arg APP_PATH=./output \   # pass artifact path into Dockerfile if needed
+          --build-arg APP_PATH=./output \
           -t $ECR_REGISTRY/$ECR_REPO:${IMAGE_TAG} \
           -t $ECR_REGISTRY/$ECR_REPO:${COMMIT_TAG} \
           -f ${{ inputs.dockerfile-path }} .
