@@ -26,10 +26,17 @@ on:
         required: false
         type: string
         default: ''
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
     env:
       AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
 
