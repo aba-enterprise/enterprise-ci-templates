@@ -1,0 +1,62 @@
+name: "Reusable CodeQL Advanced"
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: "Languages to scan (comma separated or matrix)"
+        required: true
+        type: string
+      build-mode:
+        description: "Build mode (none, autobuild, manual)"
+        required: false
+        type: string
+        default: "none"
+      dotnet-version:
+        description: ".NET version (if using csharp)"
+        required: false
+        type: string
+        default: "8.0.x"
+
+permissions:
+  security-events: write
+  packages: read
+  actions: read
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Setup runtime (only when needed)
+      - name: Setup .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ inputs.build-mode }}
+
+      # Handle manual build (if requested)
+      - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
+        run: |
+          echo "⚙️ Running manual build for C#"
+          dotnet build **/*.csproj -c Release
+
+      # Run CodeQL Analysis
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
