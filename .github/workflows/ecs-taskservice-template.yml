@@ -74,14 +74,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECSDeployRole
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
       # ✅ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: |
-          ECR_IMAGE=${{ inputs.aws-accountid }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:${{ inputs.image-tag }}
+          ECR_IMAGE=${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.ecr-repo }}:${{ inputs.image-tag }}
 
           echo "Registering ECS Task Definition for $ECR_IMAGE"
 
@@ -89,7 +89,7 @@ jobs:
           {
             "family": "${{ inputs.task-family }}",
             "networkMode": "awsvpc",
-            "executionRoleArn": "arn:aws:iam::${{ inputs.aws-accountid }}:role/ecsTaskExecutionRole",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecsTaskExecutionRole",
             "containerDefinitions": [
               {
                 "name": "${{ inputs.container-name }}",

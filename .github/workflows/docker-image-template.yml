@@ -38,7 +38,7 @@ jobs:
     environment:
       name: ${{ inputs.environment }}
     env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ inputs.aws-accountid }}:role/GitHubActionsECRPushRole
+      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
 
     permissions:
       id-token: write
@@ -50,11 +50,11 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-    - name: Check Variable
-      run: |
-        echo "AWS account number - ${{ inputs.aws-accountid }} "
-        echo "Env AWS Number ${{ vars.AWS_ACCOUNTID }}"
-        echo "AWS_ROLE_ARN=$AWS_ROLE_ARN"
+    # - name: Check Variable
+    #   run: |
+    #     echo "AWS account number - ${{ inputs.aws-accountid }} "
+    #     echo "Env AWS Number ${{ vars.AWS_ACCOUNTID }}"
+    #     echo "AWS_ROLE_ARN=$AWS_ROLE_ARN"
 
     # - name: Setup .NET
     #   uses: actions/setup-dotnet@v3
