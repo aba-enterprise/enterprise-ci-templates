@@ -1,4 +1,4 @@
-name: Reusable ECR CI/CD Pipeline
+name: Reusable Docker build and image pusg template
 
 on:
   workflow_call:
