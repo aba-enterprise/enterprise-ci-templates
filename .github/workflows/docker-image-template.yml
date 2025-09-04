@@ -10,18 +10,10 @@ on:
         required: false
         type: string
         default: ''
-      # image-name:
-      #   required: false
-      #   type: string
-      #   default: ''
       aws-region:
         required: false
         type: string
         default: 'us-east-2'
-      # ecr-repo:
-      #   required: false
-      #   type: string
-      #   default: ''
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
@@ -35,7 +27,6 @@ jobs:
       name: ${{ inputs.environment }}
     env:
       AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
-      # AWS_ECR_REPO: ${{ vars.AWS_ECR_REPO }}
 
     permissions:
       id-token: write
@@ -47,34 +38,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+    
     # - name: Check Variable
     #   run: |
     #     echo "AWS account number - ${{ inputs.aws-accountid }} "
     #     echo "Env AWS Number ${{ vars.AWS_ACCOUNTID }}"
     #     echo "AWS_ROLE_ARN=$AWS_ROLE_ARN"
-
-    # - name: Setup .NET
-    #   uses: actions/setup-dotnet@v3
-    #   with:
-    #     dotnet-version: '8.0.x'
-
-    # - name: Restore dependencies
-    #   run: dotnet restore ${{ inputs.project-path }}
-
-    # - name: Build
-    #   run: dotnet build ${{ inputs.project-path }} -c Release --no-restore
-
-    # - name: Test (auto-discover *Tests.csproj)
-    #   run: |
-    #     set -euo pipefail
-    #     if git ls-files '*Tests.csproj' >/dev/null 2>&1; then
-    #       while IFS= read -r t; do
-    #           echo "Running tests: $t"
-    #           dotnet test "$t" -c Release --no-build --logger trx
-    #       done < <(git ls-files '*Tests.csproj')
-    #     else
-    #       echo "No test projects found; skipping."
-    #     fi
     
     # ✅ Download build artifacts
     - name: Download build artifacts
@@ -102,7 +71,7 @@ jobs:
       if: ${{ inputs.dockerfile-path != ''  && vars.AWS_ECR_REPO != '' }}
       run: |
         ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-        ECR_REPO=${{ inputs.ecr-repo }}
+        ECR_REPO=${{ vars.AWS_ECR_REPO }}
         IMAGE_TAG=latest
         COMMIT_TAG=${{ github.sha }}
 
