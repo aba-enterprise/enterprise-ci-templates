@@ -64,12 +64,11 @@ jobs:
 
       - name: Check CodeQL Alerts
         run: |
-          REF="refs/heads/${GITHUB_REF_NAME}"
-          echo "🔎 Checking CodeQL alerts for branch $REF..."
+          echo "🔎 Checking CodeQL alerts for branch ${GITHUB_REF}..."
 
           curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=$REF&state=open" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${GITHUB_REF}&state=open" \
             | jq > alerts.json
           
           cat alerts.json
