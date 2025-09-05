@@ -73,10 +73,10 @@ jobs:
           
           cat alerts.json
 
-          CRITICAL=$(jq '[.[] | select(.rule.severity=="critical")] | length' alerts.json)
-          HIGH=$(jq '[.[] | select(.rule.severity=="high")] | length' alerts.json)
-          MEDIUM=$(jq '[.[] | select(.rule.severity=="medium")] | length' alerts.json)
-          LOW=$(jq '[.[] | select(.rule.severity=="low")] | length' alerts.json)
+          CRITICAL=$(jq '[.[] | select(.rule.security_severity_level=="critical")] | length' alerts.json)
+          HIGH=$(jq '[.[] | select(.rule.security_severity_level=="high")] | length' alerts.json)
+          MEDIUM=$(jq '[.[] | select(.rule.security_severity_level=="medium")] | length' alerts.json)
+          LOW=$(jq '[.[] | select(.rule.security_severity_level=="low")] | length' alerts.json)
 
           echo "🔎 CodeQL Findings Summary:"
           echo "  Critical: $CRITICAL"
