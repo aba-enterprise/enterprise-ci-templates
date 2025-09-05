@@ -71,6 +71,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${GITHUB_SHA}&state=open" \
             | jq > alerts.json
+          
+          cat alerts.json
 
           CRITICAL=$(jq '[.[] | select(.rule.severity=="critical")] | length' alerts.json)
           HIGH=$(jq '[.[] | select(.rule.severity=="high")] | length' alerts.json)
