@@ -62,24 +62,40 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
 
-      # 🔎 Check for findings
       - name: Check CodeQL Alerts
         run: |
           echo "🔎 Checking CodeQL alerts for branch ${{ github.ref_name }}..."
 
+          # Fetch ALL severities
           curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${{ github.ref_name }}&state=open&severity=critical" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${{ github.ref_name }}&state=open" \
             | jq > alerts.json
 
-          COUNT=$(jq '. | length' alerts.json)
+          CRITICAL=$(jq '[.[] | select(.rule.severity=="critical")] | length' alerts.json)
+          HIGH=$(jq '[.[] | select(.rule.severity=="high")] | length' alerts.json)
+          MEDIUM=$(jq '[.[] | select(.rule.severity=="medium")] | length' alerts.json)
+          LOW=$(jq '[.[] | select(.rule.severity=="low")] | length' alerts.json)
 
-          if [ "$COUNT" -gt 0 ]; then
-            echo "❌ Found $COUNT critical CodeQL findings. Failing pipeline."
-            cat alerts.json
+          echo "🔎 CodeQL Findings Summary:"
+          echo "  Critical: $CRITICAL"
+          echo "  High:     $HIGH"
+          echo "  Medium:   $MEDIUM"
+          echo "  Low:      $LOW"
+
+          {
+            echo "## 🔎 CodeQL Findings Summary"
+            echo "- Critical: **$CRITICAL**"
+            echo "- High: **$HIGH**"
+            echo "- Medium: $MEDIUM"
+            echo "- Low: $LOW"
+          } >> $GITHUB_STEP_SUMMARY
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ Pipeline failed due to critical/high findings."
             exit 1
           else
-            echo "✅ No critical CodeQL findings found."
+            echo "✅ No critical/high findings. Continuing pipeline."
           fi
       
       # Upload artifacts (only for csharp builds that produced output/)
