@@ -62,6 +62,26 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
 
+      # 🔎 Check for findings
+      - name: Check CodeQL Alerts
+        run: |
+          echo "🔎 Checking CodeQL alerts for branch ${{ github.ref_name }}..."
+
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${{ github.ref_name }}&state=open&severity=critical" \
+            | jq > alerts.json
+
+          COUNT=$(jq '. | length' alerts.json)
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "❌ Found $COUNT critical CodeQL findings. Failing pipeline."
+            cat alerts.json
+            exit 1
+          else
+            echo "✅ No critical CodeQL findings found."
+          fi
+      
       # Upload artifacts (only for csharp builds that produced output/)
       - name: Upload build artifacts
         if: matrix.language == 'csharp'
