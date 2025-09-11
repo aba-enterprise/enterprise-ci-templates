@@ -1,0 +1,11 @@
+{
+  "name": "commitlint-workflow",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@commitlint/cli": "^17.7.0",
+    "@commitlint/config-conventional": "^17.7.0"
+  },
+  "scripts": {
+    "prepare": "husky install"
+  }
+}
