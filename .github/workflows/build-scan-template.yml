@@ -32,11 +32,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
+      
+      - name: Build
+        run: dotnet build --no-restore
 
-      - name: Build application
+      - name: Publish application
         if: contains(inputs.languages, 'csharp')
         run: dotnet publish ${{ inputs.project-path }} -c Release -o output
-
+      
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -70,3 +73,14 @@ jobs:
         with:
           name: dotnet-build
           path: output/
+
+      - name: Upload source for SonarQube
+        uses: actions/upload-artifact@v4
+        with:
+            name: dotnet-source
+            path: |
+              **/*.sln
+              **/*.csproj
+              **/*.cs
+              TestResults/
+              **/coverage.opencover.xml
