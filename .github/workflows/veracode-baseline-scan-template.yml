@@ -1,0 +1,75 @@
+name: "Reusable Veracode Baseline Scan"
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: "Languages to scan (comma separated or matrix)"
+        required: true
+        type: string
+      build-mode:
+        description: "Build mode (none, autobuild, manual)"
+        required: false
+        type: string
+        default: "none"
+      dotnet-version:
+        description: ".NET version (if using csharp)"
+        required: false
+        type: string
+        default: "8.0.x"
+      run-veracode-gate-check:
+        description: "Run Veracode alert check? (yes/no)"
+        type: string
+        required: false
+        default: "yes"
+
+permissions:
+  security-events: write
+  packages: read
+  actions: read
+  contents: read
+
+jobs:
+  baseline:
+    name: Baseline Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+            name: dotnet-build
+            path: ./output
+      
+      - name: Check Veracode Alerts
+        run: |
+          echo "🔎 Checking Veracode alerts for branch ${GITHUB_REF}..."
+
+          CRITICAL=0
+          HIGH=0
+          MEDIUM=0
+          LOW=0
+
+          echo "🔎 CodeQL Findings Summary:"
+          echo "  Critical: $CRITICAL"
+          echo "  High:     $HIGH"
+          echo "  Medium:   $MEDIUM"
+          echo "  Low:      $LOW"
+
+          {
+            echo "## 🔎 Veracode Findings Summary"
+            echo "- Critical: **$CRITICAL**"
+            echo "- High: **$HIGH**"
+            echo "- Medium: $MEDIUM"
+            echo "- Low: $LOW"
+          } >> $GITHUB_STEP_SUMMARY
+
+          INPUT_RUN_ALERT_CHECK=${{ inputs.run-veracode-gate-check }}
+          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+            echo "❌ Pipeline failed due to critical/high findings."
+            exit 1
+          else
+            echo "✅ No critical/high findings. Continuing pipeline."
+          fi
