@@ -38,46 +38,49 @@ jobs:
       - name: Install SonarScanner for .NET
         run: dotnet tool install --global dotnet-sonarscanner
 
+      # - name: Begin SonarQube analysis
+      #   run: |
+      #     echo "🔎 Checking SonarQube alerts for branch ${GITHUB_REF}..."
+
+      #     # CRITICAL=0
+      #     # HIGH=0
+      #     # MEDIUM=0
+      #     # LOW=0
+
+      #     # echo "🔎 CodeQL Findings Summary:"
+      #     # echo "  Critical: $CRITICAL"
+      #     # echo "  High:     $HIGH"
+      #     # echo "  Medium:   $MEDIUM"
+      #     # echo "  Low:      $LOW"
+
+      #     # {
+      #     #   echo "## 🔎 SonarQube Findings Summary"
+      #     #   echo "- Critical: **$CRITICAL**"
+      #     #   echo "- High: **$HIGH**"
+      #     #   echo "- Medium: $MEDIUM"
+      #     #   echo "- Low: $LOW"
+      #     # } >> $GITHUB_STEP_SUMMARY
+          
+      #     # INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
+      #     # if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+      #     #   echo "❌ Pipeline failed due to critical/high findings."
+      #     #   exit 1
+      #     # else
+      #     #   echo "✅ No critical/high findings. Continuing pipeline."
+      #     # fi
+          
       - name: Begin SonarQube analysis
         run: |
-          echo "🔎 Checking SonarQube alerts for branch ${GITHUB_REF}..."
-
-          CRITICAL=0
-          HIGH=0
-          MEDIUM=0
-          LOW=0
-
-          echo "🔎 CodeQL Findings Summary:"
-          echo "  Critical: $CRITICAL"
-          echo "  High:     $HIGH"
-          echo "  Medium:   $MEDIUM"
-          echo "  Low:      $LOW"
-
-          {
-            echo "## 🔎 SonarQube Findings Summary"
-            echo "- Critical: **$CRITICAL**"
-            echo "- High: **$HIGH**"
-            echo "- Medium: $MEDIUM"
-            echo "- Low: $LOW"
-          } >> $GITHUB_STEP_SUMMARY
-          
-          INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
-          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
-            echo "❌ Pipeline failed due to critical/high findings."
-            exit 1
-          else
-            echo "✅ No critical/high findings. Continuing pipeline."
-          fi
-          
-          # dotnet sonarscanner begin \
-          #   /k:"${{ inputs.projectKey }}" \
-          #   /n:"${{ inputs.projectName }}" \
-          #   /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-          #   /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-          #   /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          dotnet sonarscanner begin \
+            /k:"${{ inputs.projectKey }}" \
+            /n:"${{ inputs.projectName }}" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
 
       # - name: Rebuild from artifact (optional)
       #   run: dotnet build ./build/YourSolution.sln
 
       - name: End SonarQube analysis
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+
