@@ -53,3 +53,5 @@ permissions:
 
 ## License
 This project is licensed under the MIT License.
+
+Veracode Scans - https://github.com/Veracode-CSE-Demos/veracode-ci-templates

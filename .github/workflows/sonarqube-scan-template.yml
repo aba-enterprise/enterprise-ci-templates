@@ -1,0 +1,53 @@
+name: SonarQube Analysis (.NET Core)
+
+on:
+  workflow_call:
+    inputs:
+      projectKey:
+        required: true
+        type: string
+      projectName:
+        required: true
+        type: string
+      artifactName:
+        required: true
+        type: string
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+            name: dotnet-build
+            path: ./build
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install SonarScanner for .NET
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Begin SonarQube analysis
+        run: |
+          echo "Sonar scan"
+          # dotnet sonarscanner begin \
+          #   /k:"${{ inputs.projectKey }}" \
+          #   /n:"${{ inputs.projectName }}" \
+          #   /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+          #   /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+          #   /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      # - name: Rebuild from artifact (optional)
+      #   run: dotnet build ./build/YourSolution.sln
+
+      - name: End SonarQube analysis
+        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
