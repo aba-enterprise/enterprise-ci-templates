@@ -12,12 +12,17 @@ on:
       artifactName:
         required: true
         type: string
+      run-sonarqube-gate-check:
+        description: "Run Veracode alert check? (yes/no)"
+        type: string
+        required: false
+        default: "yes"
     secrets:
       SONAR_TOKEN:
         required: true
       SONAR_HOST_URL:
         required: true
-
+    
 jobs:
   sonarqube:
     runs-on: ubuntu-latest
@@ -38,7 +43,35 @@ jobs:
 
       - name: Begin SonarQube analysis
         run: |
-          echo "Sonar scan"
+          echo "🔎 Checking SonarQube alerts for branch ${GITHUB_REF}..."
+
+          CRITICAL=0
+          HIGH=0
+          MEDIUM=0
+          LOW=0
+
+          echo "🔎 CodeQL Findings Summary:"
+          echo "  Critical: $CRITICAL"
+          echo "  High:     $HIGH"
+          echo "  Medium:   $MEDIUM"
+          echo "  Low:      $LOW"
+
+          {
+            echo "## 🔎 SonarQube Findings Summary"
+            echo "- Critical: **$CRITICAL**"
+            echo "- High: **$HIGH**"
+            echo "- Medium: $MEDIUM"
+            echo "- Low: $LOW"
+          } >> $GITHUB_STEP_SUMMARY
+          
+          INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
+          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+            echo "❌ Pipeline failed due to critical/high findings."
+            exit 1
+          else
+            echo "✅ No critical/high findings. Continuing pipeline."
+          fi
+          
           # dotnet sonarscanner begin \
           #   /k:"${{ inputs.projectKey }}" \
           #   /n:"${{ inputs.projectName }}" \
