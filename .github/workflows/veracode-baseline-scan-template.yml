@@ -3,20 +3,6 @@ name: "Reusable Veracode Baseline Scan"
 on:
   workflow_call:
     inputs:
-      languages:
-        description: "Languages to scan (comma separated or matrix)"
-        required: true
-        type: string
-      build-mode:
-        description: "Build mode (none, autobuild, manual)"
-        required: false
-        type: string
-        default: "none"
-      dotnet-version:
-        description: ".NET version (if using csharp)"
-        required: false
-        type: string
-        default: "8.0.x"
       run-veracode-gate-check:
         description: "Run Veracode alert check? (yes/no)"
         type: string
