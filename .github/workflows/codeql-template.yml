@@ -82,7 +82,7 @@ jobs:
       - name: Publish code
         run: |
           # echo "⚙️ Running manual build & publish for C#"
-          dotnet publish **/*.csproj -c Release -o output
+          dotnet publish ${{ inputs.projectPath }} -c Release -o output
 
       # Run CodeQL Analysis
       - name: Perform CodeQL Analysis
