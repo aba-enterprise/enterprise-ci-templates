@@ -60,6 +60,12 @@ jobs:
       - name: Build
         run: dotnet build **/*.csproj --no-restore
 
+      - name: Run All Tests with Coverage
+        run: |
+          for proj in $(find . -name "*.Tests.csproj"); do
+            dotnet test "$proj" --collect:"XPlat Code Coverage"
+          done
+
       # Handle manual build (if requested)
       # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
       - name: Publish code
