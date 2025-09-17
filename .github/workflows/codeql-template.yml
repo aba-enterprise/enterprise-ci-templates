@@ -53,6 +53,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ inputs.build-mode }}
+      
+      - name: Build
+        run: dotnet build --no-restore
 
       # Handle manual build (if requested)
       # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
@@ -112,3 +115,14 @@ jobs:
         with:
           name: dotnet-build
           path: output/
+      
+      - name: Upload source for SonarQube
+        uses: actions/upload-artifact@v4
+        with:
+            name: dotnet-source
+            path: |
+              **/*.sln
+              **/*.csproj
+              **/*.cs
+              TestResults/
+              **/coverage.opencover.xml
