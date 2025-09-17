@@ -55,7 +55,7 @@ jobs:
           build-mode: ${{ inputs.build-mode }}
       
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build **/*.csproj --no-restore
 
       # Handle manual build (if requested)
       # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
