@@ -62,6 +62,9 @@ jobs:
       
       - name: Clean
         run: dotnet clean ${{ inputs.projectPath }}
+      
+      - name: Test Clean
+        run: dotnet clean ${{ inputs.testProjectPath }}
 
       - name: Restore NuGet packages
         run: dotnet restore ${{ inputs.projectPath }}
