@@ -61,7 +61,7 @@ jobs:
           build-mode: ${{ inputs.build-mode }}
       
       - name: Clean
-        run: dotnet clean
+        run: dotnet clean ${{ inputs.projectPath }}
 
       - name: Restore NuGet packages
         run: dotnet restore ${{ inputs.projectPath }}
