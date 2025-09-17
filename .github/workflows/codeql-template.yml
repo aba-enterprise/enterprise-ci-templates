@@ -66,6 +66,9 @@ jobs:
       - name: Test Clean
         run: dotnet clean ${{ inputs.testProjectPath }}
 
+      - name: Clear NuGet cache
+        run: dotnet nuget locals all --clear
+
       - name: Restore NuGet packages
         run: dotnet restore ${{ inputs.projectPath }} --no-cache
       
@@ -75,7 +78,7 @@ jobs:
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
-          dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" || echo "No tests found, skipping coverage."
+          dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage"
 
       # - name: Run All Tests with Coverage
       #   run: |
