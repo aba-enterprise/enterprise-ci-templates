@@ -44,7 +44,7 @@ jobs:
       - name: Install SonarScanner for .NET
         run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Begin SonarQube analysis
+      - name: Begin SonarQube Analysis
         run: |
           dotnet sonarscanner begin \
             /k:"${{ inputs.projectKey }}" \
@@ -53,10 +53,43 @@ jobs:
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+            /d:sonar.sarif.reportPaths="sonar-report.sarif"
       
-      - name: Build for SonarQube analysis
+      - name: Build for SonarQube Analysis
         run: dotnet build ./source/${{ inputs.projectPath }}
 
-      - name: End SonarQube analysis
+      - name: Run Tests with Coverage
+        continue-on-error: true
+        run: |
+          dotnet test ${{ inputs.projectPath }} --collect:"XPlat Code Coverage" || echo "No tests found, skipping coverage."
+
+      - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+
+      - name: Upload SARIF Report
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: sonar-report.sarif
+
+      - name: Extract Coverage Summary
+        if: success() || always()
+        run: |
+          if [ -f "**/coverage.cobertura.xml" ]; then
+            reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:TextSummary
+            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check Quality Gate Status
+        run: |
+          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }} "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" | jq -r '.projectStatus.status')
+          echo "### Quality Gate Status: $STATUS" >> $GITHUB_STEP_SUMMARY
+          if [ "$STATUS" != "OK" ]; then
+            echo "Quality Gate failed!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
 
