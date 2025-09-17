@@ -58,9 +58,6 @@ jobs:
             /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
             /d:sonar.sarif.reportPaths="sonar-report.sarif"
       
-      - name: Clean
-        run: dotnet clean
-
       - name: Build for SonarQube Analysis
         run: dotnet build ./source/${{ inputs.projectPath }}
 

@@ -60,6 +60,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ inputs.build-mode }}
       
+      - name: Clean
+        run: dotnet clean
+
       - name: Restore NuGet packages
         run: dotnet restore ${{ inputs.projectPath }}
       
