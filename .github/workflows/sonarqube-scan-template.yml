@@ -9,6 +9,9 @@ on:
       projectName:
         required: true
         type: string
+      organizationKey:
+        required: true
+        type: string
       run-sonarqube-gate-check:
         description: "Run Veracode alert check? (yes/no)"
         type: string
@@ -42,6 +45,7 @@ jobs:
         run: |
           dotnet sonarscanner begin \
             /k:"${{ inputs.projectKey }}" \
+            /o:"${{ inputs.organizationKey }}" \
             /n:"${{ inputs.projectName }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
