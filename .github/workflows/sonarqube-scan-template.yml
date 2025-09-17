@@ -64,7 +64,7 @@ jobs:
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
-          dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" || echo "No tests found, skipping coverage."
+          dotnet test ./source/${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" || echo "No tests found, skipping coverage."
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
