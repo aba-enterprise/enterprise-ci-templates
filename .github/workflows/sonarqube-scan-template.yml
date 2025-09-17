@@ -66,10 +66,16 @@ jobs:
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
 
-      - name: Upload SARIF Report
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: sonar-report.sarif
+      - name: Upload SARIF Report (if exists)
+        if: success() || always()
+        run: |
+          if [ -f "sonar-report.sarif" ]; then
+            echo "Uploading SARIF report..."
+            gh workflow run github/codeql-action/upload-sarif@v3 --with sarif_file=sonar-report.sarif
+          else
+            echo "SARIF report not found, skipping upload."
+          fi
+
 
       - name: Extract Coverage Summary
         if: success() || always()
