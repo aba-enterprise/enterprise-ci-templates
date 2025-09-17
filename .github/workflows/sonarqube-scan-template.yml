@@ -49,7 +49,7 @@ jobs:
           dotnet sonarscanner begin \
             /k:"${{ inputs.projectKey }}" \
             /n:"${{ inputs.projectName }}" \
-            /n:"${{ inputs.organizationKey }}" \
+            /o:"${{ inputs.organizationKey }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
