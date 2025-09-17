@@ -54,6 +54,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ inputs.build-mode }}
       
+      - name: Restore NuGet packages
+        run: dotnet restore **/*.csproj
+      
       - name: Build
         run: dotnet build **/*.csproj --no-restore
 
