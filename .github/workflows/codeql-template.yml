@@ -61,7 +61,7 @@ jobs:
           build-mode: ${{ inputs.build-mode }}
       
       - name: Restore NuGet packages
-        run: dotnet restore
+        run: dotnet restore ${{ inputs.projectPath }}
       
       - name: Build
         run: dotnet build ${{ inputs.projectPath }} --no-restore
