@@ -48,11 +48,10 @@ jobs:
         run: |
           dotnet sonarscanner begin \
             /k:"${{ inputs.projectKey }}" \
-            /o:"${{ inputs.organizationKey }}" \
             /n:"${{ inputs.projectName }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
             /d:sonar.sarif.reportPaths="sonar-report.sarif"
       
       - name: Build for SonarQube Analysis
