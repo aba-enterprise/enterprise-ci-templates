@@ -71,6 +71,9 @@ jobs:
 
       - name: Restore NuGet packages
         run: dotnet restore ${{ inputs.projectPath }} --no-cache
+
+      - name: Test Restore NuGet packages
+        run: dotnet restore ${{ inputs.testProjectPath }} --no-cache
       
       - name: Build
         run: dotnet build ${{ inputs.projectPath }} --no-restore
