@@ -64,7 +64,10 @@ jobs:
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
-          dotnet test ./source/ --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura --results-directory ./TestResults
+          dotnet test ./source/ \
+          --collect:"XPlat Code Coverage" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
+          --results-directory ./TestResults
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
@@ -79,11 +82,10 @@ jobs:
             echo "SARIF report not found, skipping upload."
           fi
 
-      - name: Extract Coverage Summary
+      - name: Generate Coverage Summary
         if: success() || always()
         run: |
-          pwd
-          COVERAGE_FILE=coverage_file=./TestResults/**/coverage.cobertura.xml
+          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
             reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
