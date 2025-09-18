@@ -57,7 +57,7 @@ jobs:
       # 2️⃣ Run tests and generate coverage
       - name: Run tests with coverage
         run: |
-          dotnet test ./source/dotnet-ecs-sample.Tests/dotnet-ecs-sample.Tests.csproj \
+          dotnet test ./source/ \
             --collect:"XPlat Code Coverage" \
             --results-directory ./source/TestResults
 
