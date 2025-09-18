@@ -59,29 +59,43 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ inputs.build-mode }}
-      
+
       - name: Clean
-        run: dotnet clean ${{ inputs.projectPath }}
+        run: dotnet clean
       
-      - name: Test Clean
-        run: dotnet clean ${{ inputs.testProjectPath }}
-
-      - name: Clear NuGet cache
-        run: dotnet nuget locals all --clear
-
       - name: Restore NuGet packages
-        run: dotnet restore ${{ inputs.projectPath }} --no-cache
+        run: dotnet restore
 
-      - name: Test Restore NuGet packages
-        run: dotnet restore ${{ inputs.testProjectPath }} --no-cache
-      
       - name: Build
-        run: dotnet build ${{ inputs.projectPath }} --no-restore
+        run: dotnet build
       
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
-          dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage"
+          dotnet test --collect:"XPlat Code Coverage"
+      
+      # - name: Clean
+      #   run: dotnet clean ${{ inputs.projectPath }}
+      
+      # - name: Test Clean
+      #   run: dotnet clean ${{ inputs.testProjectPath }}
+
+      # - name: Clear NuGet cache
+      #   run: dotnet nuget locals all --clear
+
+      # - name: Restore NuGet packages
+      #   run: dotnet restore ${{ inputs.projectPath }} --no-cache
+
+      # - name: Test Restore NuGet packages
+      #   run: dotnet restore ${{ inputs.testProjectPath }} --no-cache
+      
+      # - name: Build
+      #   run: dotnet build ${{ inputs.projectPath }} --no-restore
+      
+      # - name: Run Tests with Coverage
+      #   continue-on-error: true
+      #   run: |
+      #     dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage"
 
       # - name: Run All Tests with Coverage
       #   run: |
