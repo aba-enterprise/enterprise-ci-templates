@@ -162,8 +162,13 @@ jobs:
           name: dotnet-publish
           path: publishoutput/
       
-      - name: Upload build for SonarQube
+      - name: Upload sourcecode for SonarQube
         uses: actions/upload-artifact@v4
         with:
-            name: dotnet-build
-            path: buildoutput/
+            name: dotnet-sourcecode
+            path: |
+              **/*.cs
+              **/*.csproj
+              **/*.sln
+              **/*.config
+              **/*.json

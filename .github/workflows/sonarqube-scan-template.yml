@@ -36,7 +36,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-            name: dotnet-build
+            name: dotnet-sourcecode
             path: ./source
 
       - name: Setup .NET Core
@@ -50,9 +50,9 @@ jobs:
       - name: Add tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      # # 1️⃣ Build the solution (needed to produce DLLs)
-      # - name: Build solution
-      #   run: dotnet build ./source/dotnet-ecs-sample.sln --configuration Release
+      # 1️⃣ Build the solution (needed to produce DLLs)
+      - name: Build solution
+        run: dotnet build ./source/*.sln --configuration Release
 
       # 2️⃣ Run tests and generate coverage
       - name: Run tests with coverage
