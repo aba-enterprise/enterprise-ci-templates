@@ -83,6 +83,7 @@ jobs:
       - name: Extract Coverage Summary
         if: success() || always()
         run: |
+          ls -R ./TestResults/
           COVERAGE_FILE=coverage_file=./TestResults/**/coverage.cobertura.xml
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
