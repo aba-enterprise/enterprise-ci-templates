@@ -64,7 +64,6 @@ jobs:
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
-          # dotnet test ./source/${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" || echo "No tests found, skipping coverage."
           dotnet test ./source/ --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura --results-directory ./TestResults
 
       - name: End SonarQube Analysis
@@ -83,7 +82,7 @@ jobs:
       - name: Extract Coverage Summary
         if: success() || always()
         run: |
-          ls -R ./TestResults/
+          pwd
           COVERAGE_FILE=coverage_file=./TestResults/**/coverage.cobertura.xml
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
