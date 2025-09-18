@@ -44,36 +44,60 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Install SonarScanner for .NET
+      - name: Install SonarScanner
         run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Begin SonarQube Analysis
+      - name: Add tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Sonar Begin
         run: |
           dotnet sonarscanner begin \
-            /k:"${{ inputs.projectKey }}" \
-            /n:"${{ inputs.projectName }}" \
-            /o:"${{ inputs.organizationKey }}" \
-            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="coverage/OpenCover.xml"
+            /o:"${{ secrets.organizationKey }}" \
+            /k:"${{ secrets.projectKey }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
-      - name: Build Solution for SonarQube Analysis
-        run: |
-          SLN_FILE=$(find ./source -name "*.sln" | head -n 1)
-          if [ -f "$SLN_FILE" ]; then
-            echo "Building solution: $SLN_FILE"
-            dotnet build "$SLN_FILE"
-          else
-            echo "No solution file found. Skipping build."
-          fi
+      - name: Build
+        run: dotnet build --no-incremental
 
-      - name: Run Tests with Coverage
-        continue-on-error: true
-        run: |
-          dotnet test ./source/ \
-          --collect:"XPlat Code Coverage" \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
-          --results-directory ./TestResults
+      - name: Test with coverage
+        run: dotnet test --collect:"XPlat Code Coverage"
+
+      - name: Sonar End
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+      
+      
+      
+      # - name: Install SonarScanner for .NET
+      #   run: dotnet tool install --global dotnet-sonarscanner
+
+      # - name: Begin SonarQube Analysis
+      #   run: |
+      #     dotnet sonarscanner begin \
+      #       /k:"${{ inputs.projectKey }}" \
+      #       /n:"${{ inputs.projectName }}" \
+      #       /o:"${{ inputs.organizationKey }}" \
+      #       /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+      #       /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+      #       /d:sonar.cs.opencover.reportsPaths="coverage/OpenCover.xml"
+
+      # - name: Build Solution for SonarQube Analysis
+      #   run: |
+      #     SLN_FILE=$(find ./source -name "*.sln" | head -n 1)
+      #     if [ -f "$SLN_FILE" ]; then
+      #       echo "Building solution: $SLN_FILE"
+      #       dotnet build "$SLN_FILE"
+      #     else
+      #       echo "No solution file found. Skipping build."
+      #     fi
+
+      # - name: Run Tests with Coverage
+      #   continue-on-error: true
+      #   run: |
+      #     dotnet test ./source/ \
+      #     --collect:"XPlat Code Coverage" \
+      #     -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
+      #     --results-directory ./TestResults
 
       # # OpenCover output format is only available for sponsors. Get your license here: https://reportgenerator.io/pro
       # - name: Convert Coverage to OpenCover
@@ -108,29 +132,29 @@ jobs:
       #     ls -la
       #     ls -R ./source/
 
-      - name: End SonarQube Analysis
-        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+      # - name: End SonarQube Analysis
+      #   run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
-      - name: Setup ReportGenerator
-        run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      # - name: Setup ReportGenerator
+      #   run: |
+      #     dotnet tool install -g dotnet-reportgenerator-globaltool
+      #     echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      - name: Extract Coverage Summary
-        run: |
-          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
-          echo "Coverage file found: $COVERAGE_FILE"
-          if [ -f "$COVERAGE_FILE" ]; then
-            reportgenerator \
-              -reports:$COVERAGE_FILE \
-              -targetdir:coverage \
-              -reporttypes:TextSummary
-            echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-            cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
-          else
-            echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-            echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
-          fi
+      # - name: Extract Coverage Summary
+      #   run: |
+      #     COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+      #     echo "Coverage file found: $COVERAGE_FILE"
+      #     if [ -f "$COVERAGE_FILE" ]; then
+      #       reportgenerator \
+      #         -reports:$COVERAGE_FILE \
+      #         -targetdir:coverage \
+      #         -reporttypes:TextSummary
+      #       echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+      #       cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
+      #     else
+      #       echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+      #       echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
+      #     fi
       
       # - name: Generate Coverage Summary
       #   run: |
