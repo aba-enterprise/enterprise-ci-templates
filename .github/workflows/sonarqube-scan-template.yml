@@ -82,8 +82,13 @@ jobs:
             echo "SARIF report not found, skipping upload."
           fi
 
-      - name: Generate Coverage Summary
-        if: success() || always()
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Add ReportGenerator to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Extract Coverage Summary
         run: |
           COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
           echo "Coverage file found: $COVERAGE_FILE"
