@@ -56,10 +56,18 @@ jobs:
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
-            /d:sonar.sarif.reportPaths="sonar-report.sarif"
+            /d:sonar.sarif.reportPaths="sonar-report.sarif" \
+            /d:sonar.verbose=true
       
-      - name: Build for SonarQube Analysis
-        run: dotnet build ./source/${{ inputs.projectPath }}
+      - name: Build Solution for SonarQube Analysis
+        run: |
+          SLN_FILE=$(find ./source -name "*.sln" | head -n 1)
+          if [ -f "$SLN_FILE" ]; then
+            echo "Building solution: $SLN_FILE"
+            dotnet build "$SLN_FILE"
+          else
+            echo "No solution file found. Skipping build."
+          fi
 
       - name: Run Tests with Coverage
         continue-on-error: true
@@ -71,16 +79,6 @@ jobs:
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
-
-      - name: Upload SARIF Report (if exists)
-        if: success() || always()
-        run: |
-          if [ -f "sonar-report.sarif" ]; then
-            echo "Uploading SARIF report..."
-            gh workflow run github/codeql-action/upload-sarif@v3 --with sarif_file=sonar-report.sarif
-          else
-            echo "SARIF report not found, skipping upload."
-          fi
 
       - name: Setup ReportGenerator
         run: |
