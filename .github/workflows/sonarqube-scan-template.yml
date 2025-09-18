@@ -53,8 +53,8 @@ jobs:
       - name: Sonar Begin
         run: |
           dotnet sonarscanner begin \
-            /o:"${{ secrets.organizationKey }}" \
-            /k:"${{ secrets.projectKey }}" \
+            /o:"${{ inputs.organizationKey }}" \
+            /k:"${{ inputs.projectKey }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
       - name: Build
