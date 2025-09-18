@@ -6,15 +6,15 @@ on:
       projectKey:
         required: true
         type: string
-      projectName:
-        required: true
-        type: string
-      projectPath:
-        required: true
-        type: string
-      testProjectPath:
-        required: true
-        type: string
+      # projectName:
+      #   required: true
+      #   type: string
+      # projectPath:
+      #   required: true
+      #   type: string
+      # testProjectPath:
+      #   required: true
+      #   type: string
       organizationKey:
         required: true
         type: string
