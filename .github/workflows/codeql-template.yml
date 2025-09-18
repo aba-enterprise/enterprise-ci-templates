@@ -67,7 +67,7 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build
+        run: dotnet build -o buildoutput
       
       - name: Run Tests with Coverage
         continue-on-error: true
@@ -108,7 +108,7 @@ jobs:
       - name: Publish code
         run: |
           # echo "⚙️ Running manual build & publish for C#"
-          dotnet publish ${{ inputs.projectPath }} -c Release -o output
+          dotnet publish ${{ inputs.projectPath }} -c Release -o publishoutput
 
       # Run CodeQL Analysis
       - name: Perform CodeQL Analysis
@@ -154,21 +154,16 @@ jobs:
             echo "✅ No critical/high findings. Continuing pipeline."
           fi
       
-      # Upload artifacts (only for csharp builds that produced output/)
-      - name: Upload build artifacts
+      # Upload artifacts (only for csharp builds that produced publishoutput/)
+      - name: Upload publish artifacts
         if: matrix.language == 'csharp'
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet-build
-          path: output/
+          name: dotnet-publish
+          path: publishoutput/
       
-      - name: Upload source for SonarQube
+      - name: Upload build for SonarQube
         uses: actions/upload-artifact@v4
         with:
-            name: dotnet-source
-            path: |
-              **/*.sln
-              **/*.csproj
-              **/*.cs
-              TestResults/
-              **/coverage.opencover.xml
+            name: dotnet-build
+            path: buildoutput/

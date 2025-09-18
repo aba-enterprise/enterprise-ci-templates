@@ -49,7 +49,7 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: dotnet-build
+        name: dotnet-publish
         path: ./output
 
     # ✅ Configure AWS credentials using OIDC
