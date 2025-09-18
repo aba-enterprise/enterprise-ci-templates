@@ -75,23 +75,24 @@ jobs:
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
           --results-directory ./TestResults
 
-      - name: Convert Coverage to OpenCover
-        run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
+      # # OpenCover output format is only available for sponsors. Get your license here: https://reportgenerator.io/pro
+      # - name: Convert Coverage to OpenCover
+      #   run: |
+      #     dotnet tool install -g dotnet-reportgenerator-globaltool
 
-          echo "🔍 Searching for coverage.cobertura.xml file..."
-          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+      #     echo "🔍 Searching for coverage.cobertura.xml file..."
+      #     COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
 
-          if [ -f "$COVERAGE_FILE" ]; then
-            echo "✅ Coverage file found: $COVERAGE_FILE"
-            reportgenerator \
-              -reports:"$COVERAGE_FILE" \
-              -targetdir:"coverage" \
-              -reporttypes:OpenCover
-          else
-            echo "❌ Coverage file not found. Skipping report generation."
-            # exit 1  # Optional: fail the pipeline if coverage is expected
-          fi
+      #     if [ -f "$COVERAGE_FILE" ]; then
+      #       echo "✅ Coverage file found: $COVERAGE_FILE"
+      #       reportgenerator \
+      #         -reports:"$COVERAGE_FILE" \
+      #         -targetdir:"coverage" \
+      #         -reporttypes:OpenCover
+      #     else
+      #       echo "❌ Coverage file not found. Skipping report generation."
+      #       # exit 1  # Optional: fail the pipeline if coverage is expected
+      #     fi
 
       # - name: Run Tests with Coverlet
       #   run: |
@@ -120,7 +121,10 @@ jobs:
           COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
-            reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
+            reportgenerator \
+              -reports:$COVERAGE_FILE \
+              -targetdir:coverage \
+              -reporttypes:TextSummary
             echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
           else
@@ -149,10 +153,16 @@ jobs:
           STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
             "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
             | jq -r '.projectStatus.status')
+
           echo "Quality Gate status: $STATUS"
-          if [ "$STATUS" = "OK" ]; then
-            echo "Quality Gate passed: $STATUS ✅" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Quality Gate status: $STATUS ❌" >> $GITHUB_STEP_SUMMARY
-            # exit 1   # uncomment only if you want pipeline to fail
+          INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
+          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]]; then
+            if [ "$STATUS" = "OK" ]; then
+              echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
+              # exit 1  # Uncomment to fail the pipeline on gate failure
+            fi
+          else [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
+            echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no)." >> $GITHUB_STEP_SUMMARY
           fi
