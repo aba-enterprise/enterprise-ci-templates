@@ -100,13 +100,13 @@ jobs:
             echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Check Quality Gate Status
+      - name: Check SonarQube Quality Gate
         run: |
-          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }} "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" | jq -r '.projectStatus.status')
+          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
+            "https://<your-sonarqube-host>/api/qualitygates/project_status?projectKey=aba-d_demogitactions" \
+            | jq -r '.projectStatus.status')
           echo "### Quality Gate Status: $STATUS" >> $GITHUB_STEP_SUMMARY
           if [ "$STATUS" != "OK" ]; then
             echo "Quality Gate failed!" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-
-
