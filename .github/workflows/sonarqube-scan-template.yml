@@ -9,12 +9,12 @@ on:
       # projectName:
       #   required: true
       #   type: string
-      # projectPath:
-      #   required: true
-      #   type: string
-      # testProjectPath:
-      #   required: true
-      #   type: string
+      projectSlnPath:
+        required: true
+        type: string
+      testProjectPath:
+        required: true
+        type: string
       organizationKey:
         required: true
         type: string
@@ -52,16 +52,21 @@ jobs:
       - name: Add tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
+      - name: Build solution
+        run: dotnet build ./source/${{ inputs.projectSlnPath }}
+
       - name: Run tests with coverage
         run: |
-          dotnet test ./source/ \
+          dotnet test ./source/${{ inputs.testProjectPath }} \
             --collect:"XPlat Code Coverage" \
-            --results-directory ./source/TestResults
+            --results-directory ./source/TestResults \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
       
       - name: Find coverage file
         id: coverage
         run: |
-          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+          # COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.opencover.xml" | head -n 1)
           echo "Coverage file found: $COVERAGE_FILE"
           echo "COVERAGE_FILE=$COVERAGE_FILE" >> $GITHUB_ENV
 
@@ -82,16 +87,11 @@ jobs:
             /k:"org-testfordemo_myapp-netcore" \
             /o:"org-testfordemo" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="$COVERAGE_FILE"
+            /d:sonar.cs.opencover.reportsPaths="$COVERAGE_FILE" \
+            /d:sonar.sources="./source"
 
       - name: Build solution
-        run: dotnet build ./source/*.sln --configuration Release
-
-      # - name: Run tests with coverage
-      #   run: |
-      #       dotnet test ./dotnet-ecs-sample.Tests/dotnet-ecs-sample.Tests.csproj \
-      #       --collect:"XPlat Code Coverage" \
-      #       -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+        run: dotnet build ./source/${{ inputs.projectSlnPath }}
 
       - name: End SonarScanner
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
