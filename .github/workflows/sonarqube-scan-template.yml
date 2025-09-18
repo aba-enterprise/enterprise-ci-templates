@@ -55,10 +55,8 @@ jobs:
             /o:"${{ inputs.organizationKey }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
-            /d:sonar.sarif.reportPaths="sonar-report.sarif" \
-            /d:sonar.verbose=true
-      
+            /d:sonar.cs.opencover.reportsPaths="TestResults/coverage.opencover.xml"
+
       - name: Build Solution for SonarQube Analysis
         run: |
           SLN_FILE=$(find ./source -name "*.sln" | head -n 1)
@@ -69,13 +67,20 @@ jobs:
             echo "No solution file found. Skipping build."
           fi
 
-      - name: Run Tests with Coverage
-        continue-on-error: true
+      # - name: Run Tests with Coverage
+      #   continue-on-error: true
+      #   run: |
+      #     dotnet test ./source/ \
+      #     --collect:"XPlat Code Coverage" \
+      #     -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
+      #     --results-directory ./TestResults
+
+      - name: Run Tests with Coverlet
         run: |
           dotnet test ./source/ \
-          --collect:"XPlat Code Coverage" \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
-          --results-directory ./TestResults
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=opencover \
+            /p:CoverletOutput=./TestResults/coverage.opencover.xml
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
@@ -85,13 +90,28 @@ jobs:
           dotnet tool install -g dotnet-reportgenerator-globaltool
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-
-      - name: Extract Coverage Summary
+      # - name: Extract Coverage Summary
+      #   run: |
+      #     COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+      #     echo "Coverage file found: $COVERAGE_FILE"
+      #     if [ -f "$COVERAGE_FILE" ]; then
+      #       reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
+      #       echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+      #       cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
+      #     else
+      #       echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+      #       echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
+      #     fi
+      
+      - name: Generate Coverage Summary
         run: |
-          COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
+          COVERAGE_FILE=$(find ./source -type f -name "coverage.opencover.xml" | head -n 1)
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
-            reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
+            reportgenerator \
+              -reports:"$COVERAGE_FILE" \
+              -targetdir:"coverage" \
+              -reporttypes:TextSummary
             echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
           else
