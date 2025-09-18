@@ -157,12 +157,12 @@ jobs:
           echo "Quality Gate status: $STATUS"
           INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
           if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]]; then
-            if [ "$STATUS" = "OK" ]; then
-              echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
-              # exit 1  # Uncomment to fail the pipeline on gate failure
-            fi
-          else [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
+              if [ "$STATUS" = "OK" ]; then
+                echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
+                exit 1  # Uncomment to fail the pipeline on gate failure
+              fi
+          else
             echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no)." >> $GITHUB_STEP_SUMMARY
           fi
