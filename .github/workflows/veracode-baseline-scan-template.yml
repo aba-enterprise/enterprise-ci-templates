@@ -52,7 +52,7 @@ jobs:
             echo "- High: **$HIGH**"
             echo "- Medium: $MEDIUM"
             echo "- Low: $LOW"
-            echo "_Informational: $INFORMATIONAL"
+            echo "_ Informational: $INFORMATIONAL"
           } >> $GITHUB_STEP_SUMMARY
 
           INPUT_RUN_ALERT_CHECK=${{ inputs.run-veracode-gate-check }}
