@@ -26,7 +26,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-            name: dotnet-build
+            name: dotnet-sourcecode
             path: ./source
       
       - name: Check Veracode Alerts

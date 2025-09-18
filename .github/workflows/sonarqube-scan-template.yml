@@ -44,8 +44,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Install SonarScanner
-        run: dotnet tool install --global dotnet-sonarscanner
+      - name: Install Tools
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
       - name: Add tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
