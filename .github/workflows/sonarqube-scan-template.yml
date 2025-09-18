@@ -54,7 +54,7 @@ jobs:
             /n:"${{ inputs.projectName }}" \
             /o:"${{ inputs.organizationKey }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
             /d:sonar.sarif.reportPaths="sonar-report.sarif"
       
@@ -70,7 +70,7 @@ jobs:
           --results-directory ./TestResults
 
       - name: End SonarQube Analysis
-        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
       - name: Upload SARIF Report (if exists)
         if: success() || always()
