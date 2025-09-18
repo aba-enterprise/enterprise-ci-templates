@@ -52,18 +52,12 @@ jobs:
       - name: Add tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      # 1️⃣ Build the solution (needed to produce DLLs)
-      - name: Build solution
-        run: dotnet build ./source/*.sln --configuration Release
-
-      # 2️⃣ Run tests and generate coverage
       - name: Run tests with coverage
         run: |
           dotnet test ./source/ \
             --collect:"XPlat Code Coverage" \
             --results-directory ./source/TestResults
 
-      # 3️⃣ Find coverage file dynamically
       - name: Find coverage file
         id: coverage
         run: |
@@ -71,7 +65,6 @@ jobs:
           echo "Coverage file found: $COVERAGE_FILE"
           echo "COVERAGE_FILE=$COVERAGE_FILE" >> $GITHUB_ENV
 
-      # 4️⃣ Generate coverage summary
       - name: Generate Coverage Summary
         run: |
           if [ -f "$COVERAGE_FILE" ]; then
@@ -83,8 +76,7 @@ jobs:
             echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
           fi
 
-      # 5️⃣ Run SonarScanner
-      - name: Run SonarScanner
+      - name: Begin SonarScanner
         run: |
           dotnet sonarscanner begin \
             /k:"org-testfordemo_myapp-netcore" \
@@ -92,10 +84,11 @@ jobs:
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="$COVERAGE_FILE"
 
-          # Build again if needed for SonarScanner to see all DLLs
-          # dotnet build ./source/dotnet-ecs-sample.sln --configuration Release
+      - name: Build solution
+        run: dotnet build ./source/*.sln --configuration Release
 
-          dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+      - name: End SonarScanner
+        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
       
       # - name: Sonar Begin
       #   run: |
