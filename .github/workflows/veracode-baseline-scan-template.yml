@@ -37,19 +37,22 @@ jobs:
           HIGH=0
           MEDIUM=0
           LOW=0
+          INFORMATIONAL=0
 
-          echo "🔎 CodeQL Findings Summary:"
+          echo "🔎 CodeQL Severity Findings Summary:"
           echo "  Critical: $CRITICAL"
           echo "  High:     $HIGH"
           echo "  Medium:   $MEDIUM"
           echo "  Low:      $LOW"
+          echo "  Informational:    $INFORMATIONAL"
 
           {
-            echo "## 🔎 Veracode Findings Summary"
+            echo "## 🔎 Veracode Severity Findings Summary"
             echo "- Critical: **$CRITICAL**"
             echo "- High: **$HIGH**"
             echo "- Medium: $MEDIUM"
             echo "- Low: $LOW"
+            echo "_Informational: $INFORMATIONAL"
           } >> $GITHUB_STEP_SUMMARY
 
           INPUT_RUN_ALERT_CHECK=${{ inputs.run-veracode-gate-check }}
