@@ -94,10 +94,10 @@ jobs:
           echo "Coverage file found: $COVERAGE_FILE"
           if [ -f "$COVERAGE_FILE" ]; then
             reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
-            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
           else
-            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
           fi
 
