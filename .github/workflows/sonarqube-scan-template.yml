@@ -106,8 +106,9 @@ jobs:
           STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
             "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
             | jq -r '.projectStatus.status')
+          echo "Quality Gate status: $STATUS"
           if [ "$STATUS" = "OK" ]; then
-            echo "Quality Gate passed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "Quality Gate passed: $STATUS ✅" >> $GITHUB_STEP_SUMMARY
           else
             echo "Quality Gate status: $STATUS ❌" >> $GITHUB_STEP_SUMMARY
             # exit 1   # uncomment only if you want pipeline to fail
