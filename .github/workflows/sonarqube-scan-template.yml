@@ -95,6 +95,7 @@ jobs:
           echo "End the Test"
           pwd
           ls -la
+          ls -R ./source/
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"

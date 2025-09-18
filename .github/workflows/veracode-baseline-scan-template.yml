@@ -55,12 +55,14 @@ jobs:
             echo "- Informational: $INFORMATIONAL"
           } >> $GITHUB_STEP_SUMMARY
 
+          
           INPUT_RUN_ALERT_CHECK=${{ inputs.run-veracode-gate-check }}
-          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
-            echo "❌ Pipeline failed due to critical/high findings."
-            exit 1
-          elif [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
-            echo "⚠️ Gate check bypassed as per configuration (run-veracode-gate-check=no)." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ No critical/high findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
-          fi
+            if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+                echo "❌ Pipeline failed due to critical/high findings."
+                exit 1
+            elif [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
+                echo "⚠️ Gate check bypassed as per configuration (run-veracode-gate-check=no)." >> $GITHUB_STEP_SUMMARY
+            else
+                echo "✅ No critical/high findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
+            fi
+
