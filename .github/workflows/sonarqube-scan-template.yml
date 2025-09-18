@@ -75,13 +75,26 @@ jobs:
       #     -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
       #     --results-directory ./TestResults
 
+      # - name: Run Tests with Coverlet
+      #   run: |
+      #     echo "Start the Test.. $pwd"
+      #     dotnet test ./source/ \
+      #       /p:CollectCoverage=true \
+      #       /p:CoverletOutputFormat=opencover \
+      #       /p:CoverletOutput=./TestResults/coverage.opencover.xml
+      
       - name: Run Tests with Coverlet
         run: |
           echo "Start the Test.. $pwd"
-          dotnet test ./source/ \
+          pwd
+          dotnet test ./source/dotnet-ecs-sample.Tests \
             /p:CollectCoverage=true \
             /p:CoverletOutputFormat=opencover \
-            /p:CoverletOutput=./TestResults/coverage.opencover.xml
+            /p:CoverletOutput=./source/dotnet-ecs-sample.Tests/TestResults/coverage.opencover.xml
+          
+          echo "End the Test"
+          pwd
+          ls -la
 
       - name: End SonarQube Analysis
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
