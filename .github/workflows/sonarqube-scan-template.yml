@@ -55,8 +55,11 @@ jobs:
             /k:"${{ inputs.projectKey }}" \
             /o:"${{ inputs.organizationKey }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml" \
-            /d:sonar.sources="./"
+            /d:sonar.sources="./" \
+            /d:sonar.tests="./${{ inputs.testProjectPath }}" \
+            /d:sonar.test.inclusions="**/*.cs"
 
       # 5️⃣ Build solution
       - name: Build Solution
@@ -86,69 +89,6 @@ jobs:
           else
             echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
           fi
-      
-      # - name: Download build artifacts
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #       name: dotnet-sourcecode
-      #       path: ./source
-
-      # - name: Setup .NET Core
-      #   uses: actions/setup-dotnet@v4
-      #   with:
-      #     dotnet-version: '8.0.x'
-
-      # - name: Install Tools
-      #   run: |
-      #     dotnet tool install --global dotnet-sonarscanner
-      #     dotnet tool install --global dotnet-reportgenerator-globaltool
-
-      # - name: Add tools to PATH
-      #   run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-
-      # # - name: Build solution
-      # #   run: dotnet build ./source/${{ inputs.projectSlnPath }}
-
-      # - name: Run tests with coverage
-      #   run: |
-      #     dotnet test ./source/${{ inputs.testProjectPath }} \
-      #       --collect:"XPlat Code Coverage" \
-      #       --results-directory ./source/TestResults \
-      #       -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
-      
-      # - name: Find coverage file
-      #   id: coverage
-      #   run: |
-      #     # COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.cobertura.xml" | head -n 1)
-      #     COVERAGE_FILE=$(find ./source -type f -path "*/TestResults/*/coverage.opencover.xml" | head -n 1)
-      #     echo "Coverage file found: $COVERAGE_FILE"
-      #     echo "COVERAGE_FILE=$COVERAGE_FILE" >> $GITHUB_ENV
-
-      # - name: Generate Coverage Summary
-      #   run: |
-      #     if [ -f "$COVERAGE_FILE" ]; then
-      #       reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage -reporttypes:TextSummary
-      #       echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-      #       cat coverage/Summary.txt >> $GITHUB_STEP_SUMMARY
-      #     else
-      #       echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-      #       echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
-      #     fi
-
-      # - name: Begin SonarScanner
-      #   run: |
-      #     dotnet sonarscanner begin \
-      #       /k:"org-testfordemo_myapp-netcore" \
-      #       /o:"org-testfordemo" \
-      #       /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-      #       /d:sonar.cs.opencover.reportsPaths="$COVERAGE_FILE" \
-      #       /d:sonar.sources="./source"
-
-      # - name: Build solution
-      #   run: dotnet build ./source/${{ inputs.projectSlnPath }} --configuration Release
-
-      # - name: End SonarScanner
-      #   run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
       
       - name: Check SonarQube Quality Gate
         run: |
