@@ -54,7 +54,7 @@ jobs:
           dotnet sonarscanner begin \
             /k:"${{ inputs.projectKey }}" \
             /o:"${{ inputs.organizationKey }}" \
-            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml" \
             /d:sonar.sources="./"
 
@@ -73,7 +73,7 @@ jobs:
 
       # 7️⃣ End SonarScanner
       - name: End SonarScanner
-        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
       # 8️⃣ Optional: Generate coverage summary
       - name: Generate Coverage Summary
@@ -140,7 +140,7 @@ jobs:
       #     dotnet sonarscanner begin \
       #       /k:"org-testfordemo_myapp-netcore" \
       #       /o:"org-testfordemo" \
-      #       /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+      #       /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
       #       /d:sonar.cs.opencover.reportsPaths="$COVERAGE_FILE" \
       #       /d:sonar.sources="./source"
 
@@ -148,7 +148,7 @@ jobs:
       #   run: dotnet build ./source/${{ inputs.projectSlnPath }} --configuration Release
 
       # - name: End SonarScanner
-      #   run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+      #   run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
       
       - name: Check SonarQube Quality Gate
         run: |
