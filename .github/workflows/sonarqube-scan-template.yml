@@ -40,7 +40,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # 3️⃣ Install tools
+      # 3️⃣ Install SonarScanner and ReportGenerator
       - name: Install Tools
         run: |
           dotnet tool install --global dotnet-sonarscanner
@@ -55,7 +55,7 @@ jobs:
             /k:"${{ inputs.projectKey }}" \
             /o:"${{ inputs.organizationKey }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="./coverage/coverage.opencover.xml" \
+            /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml" \
             /d:sonar.sources="./"
 
       # 5️⃣ Build solution
