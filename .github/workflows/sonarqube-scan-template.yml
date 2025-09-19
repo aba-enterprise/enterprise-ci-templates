@@ -25,7 +25,6 @@ on:
         required: true
       SONAR_HOST_URL:
         required: true
-    
 jobs:
   sonarqube:
     runs-on: ubuntu-latest
