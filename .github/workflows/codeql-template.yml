@@ -60,49 +60,14 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ inputs.build-mode }}
 
-      - name: Clean
-        run: dotnet clean
-      
       - name: Restore NuGet packages
         run: dotnet restore
-
-      - name: Build
-        run: dotnet build -o buildoutput
       
       - name: Run Tests with Coverage
         continue-on-error: true
         run: |
           dotnet test --collect:"XPlat Code Coverage"
       
-      # - name: Clean
-      #   run: dotnet clean ${{ inputs.projectPath }}
-      
-      # - name: Test Clean
-      #   run: dotnet clean ${{ inputs.testProjectPath }}
-
-      # - name: Clear NuGet cache
-      #   run: dotnet nuget locals all --clear
-
-      # - name: Restore NuGet packages
-      #   run: dotnet restore ${{ inputs.projectPath }} --no-cache
-
-      # - name: Test Restore NuGet packages
-      #   run: dotnet restore ${{ inputs.testProjectPath }} --no-cache
-      
-      # - name: Build
-      #   run: dotnet build ${{ inputs.projectPath }} --no-restore
-      
-      # - name: Run Tests with Coverage
-      #   continue-on-error: true
-      #   run: |
-      #     dotnet test ${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage"
-
-      # - name: Run All Tests with Coverage
-      #   run: |
-      #     for proj in $(find . -name "*.Tests.csproj"); do
-      #       dotnet test "$proj" --collect:"XPlat Code Coverage"
-      #     done
-
       # Handle manual build (if requested)
       # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
       - name: Publish code
@@ -125,8 +90,6 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${GITHUB_REF}&state=open" \
             | jq > alerts.json
           
-          cat alerts.json
-
           CRITICAL=$(jq '[.[] | select(.rule.security_severity_level=="critical")] | length' alerts.json)
           HIGH=$(jq '[.[] | select(.rule.security_severity_level=="high")] | length' alerts.json)
           MEDIUM=$(jq '[.[] | select(.rule.security_severity_level=="medium")] | length' alerts.json)
@@ -147,12 +110,14 @@ jobs:
           } >> $GITHUB_STEP_SUMMARY
           
           INPUT_RUN_ALERT_CHECK=${{ inputs.run-codeql-gate-check }}
-          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
-            echo "❌ Pipeline failed due to critical/high findings."
-            exit 1
-          else
-            echo "✅ No critical/high findings. Continuing pipeline."
-          fi
+            if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+                echo "❌ Pipeline failed due to critical/high findings."
+                exit 1
+            elif [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
+                echo "⚠️ Gate check bypassed as per configuration (run-codeql-gate-check=no)." >> $GITHUB_STEP_SUMMARY
+            else
+                echo "✅ No critical/high findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
+            fi
       
       # Upload artifacts (only for csharp builds that produced publishoutput/)
       - name: Upload publish artifacts
@@ -161,14 +126,3 @@ jobs:
         with:
           name: dotnet-publish
           path: publishoutput/
-      
-      - name: Upload sourcecode for SonarQube
-        uses: actions/upload-artifact@v4
-        with:
-            name: dotnet-sourcecode
-            path: |
-              **/*.cs
-              **/*.csproj
-              **/*.sln
-              **/*.config
-              **/*.json

@@ -23,11 +23,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-            name: dotnet-sourcecode
-            path: ./source
+      # - name: Download build artifacts
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #       name: dotnet-sourcecode
+      #       path: ./source
       
       - name: Check Veracode Alerts
         run: |
@@ -39,7 +39,7 @@ jobs:
           LOW=20
           INFORMATIONAL=40
 
-          echo "🔎 CodeQL Severity Findings Summary:"
+          echo "🔎 Veracode Severity Findings Summary:"
           echo "  Critical: $CRITICAL"
           echo "  High:     $HIGH"
           echo "  Medium:   $MEDIUM"
@@ -47,7 +47,7 @@ jobs:
           echo "  Informational:    $INFORMATIONAL"
 
           {
-            echo "🔎 Veracode Severity Findings Summary"
+            echo "## 🔎 Veracode Severity Findings Summary"
             echo "- Critical: **$CRITICAL**"
             echo "- High: **$HIGH**"
             echo "- Medium: $MEDIUM"

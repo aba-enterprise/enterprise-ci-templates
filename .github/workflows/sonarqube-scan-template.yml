@@ -82,7 +82,7 @@ jobs:
           COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
           if [ -f "$COVERAGE_FILE" ]; then
             reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
-            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
           else
             echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
@@ -104,5 +104,5 @@ jobs:
                 # exit 1  # Uncomment to fail the pipeline on gate failure
               fi
           else
-            echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no)." >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no) and current Quality Gate status is: $STATUS." >> $GITHUB_STEP_SUMMARY
           fi
