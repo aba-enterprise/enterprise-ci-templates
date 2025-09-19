@@ -56,7 +56,10 @@ jobs:
             /o:"${{ inputs.organizationKey }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.json,**/*.config,**/*.md,**/*.yml" \
+            /d:sonar.test.inclusions="**/*.cs" \
+            /d:sonar.test.exclusions="**/bin/**,**/obj/**"
 
       # 5️⃣ Build solution
       - name: Build Solution
