@@ -46,6 +46,7 @@ jobs:
             echo "❌ PR title missing Jira key: $pr_title"
             exit 1
           fi
+          echo "✅ PR title contains Jira key: $pr_title"
 
       - name: Success
         run: echo "✅ All commits and PR title include Jira ticket!"
