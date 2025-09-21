@@ -18,9 +18,10 @@ jobs:
           fetch-depth: 0
 
       - name: Validate commit messages for Jira keys
+        if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
-          commits=$(git log origin/${{ inputs.base_branch }}..HEAD --pretty=format:"%s")
+          commits=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"%s")
           missing=0
           echo "$commits" | while IFS= read -r msg; do
             if ! echo "$msg" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
