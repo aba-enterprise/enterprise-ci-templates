@@ -43,6 +43,7 @@ jobs:
         run: |
           echo "🔍 Checking PR title for Jira key..."
           pr_title="${{ github.event.pull_request.title }}"
+          echo "PR title = $pr_title"
           if ! echo "$pr_title" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
             echo "❌ PR title missing Jira key: $pr_title"
             exit 1
