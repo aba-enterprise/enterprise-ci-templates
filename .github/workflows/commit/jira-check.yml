@@ -1,0 +1,52 @@
+name: "Jira Commit & PR Title Check (Reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      base_branch:
+        description: "Base branch for comparison"
+        required: true
+        type: string
+
+jobs:
+  jira-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # -----------------------------
+      # 1️⃣ Check commit messages
+      # -----------------------------
+      - name: Check commit messages for Jira keys
+        run: |
+          echo "🔍 Checking commit messages against Jira ticket pattern..."
+          commits=$(git log origin/${{ inputs.base_branch }}..HEAD --pretty=format:"%s")
+          missing=0
+          for msg in $commits; do
+            if ! echo "$msg" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
+              echo "❌ Commit missing Jira key: $msg"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            exit 1
+          fi
+
+      # -----------------------------
+      # 2️⃣ Check PR title (if exists)
+      # -----------------------------
+      - name: Check PR title for Jira key
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "🔍 Checking PR title for Jira key..."
+          pr_title="${{ github.event.pull_request.title }}"
+          if ! echo "$pr_title" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
+            echo "❌ PR title missing Jira key: $pr_title"
+            exit 1
+          fi
+
+      - name: Success
+        run: echo "✅ All commits and PR title include Jira ticket!"
