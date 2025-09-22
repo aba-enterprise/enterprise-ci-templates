@@ -1,0 +1,126 @@
+name: Reusable Docker Build & Push
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "Application language (csharp, java, node, python)"
+        required: true
+        type: string
+
+      project-path:
+        description: "Path to the project root"
+        required: false
+        type: string
+        default: "."
+
+      dockerfile-path:
+        description: "Path to Dockerfile"
+        required: false
+        type: string
+        default: './Dockerfile'
+
+      aws-region:
+        description: "AWS region for ECR"
+        required: false
+        type: string
+        default: 'us-east-2'
+
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
+
+      image-tag:
+        description: "Docker image tag (optional, default: github.sha)"
+        required: false
+        type: string
+
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+      security-events: write
+      actions: read
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2️⃣ Build or use artifacts
+      - name: Build artifacts (if needed)
+        id: build-artifacts
+        run: |
+          ARTIFACT_PATH=""
+          PROJECT_PATH="${{ inputs.project-path }}"
+
+          if [ "${{ inputs.language }}" == "csharp" ]; then
+            echo "🔨 Building C# project..."
+            dotnet restore $PROJECT_PATH
+            dotnet publish $PROJECT_PATH -c Release -o publishoutput
+            ARTIFACT_PATH="publishoutput"
+
+          elif [ "${{ inputs.language }}" == "java" ]; then
+            echo "🔨 Building Java project..."
+            ./mvnw clean package -DskipTests -f $PROJECT_PATH
+            ARTIFACT_PATH="$PROJECT_PATH/target"
+
+          elif [ "${{ inputs.language }}" == "node" ]; then
+            echo "🔨 Building Node.js project..."
+            cd $PROJECT_PATH
+            npm install
+            npm run build
+            ARTIFACT_PATH="$PROJECT_PATH/dist"
+
+          elif [ "${{ inputs.language }}" == "python" ]; then
+            echo "🔨 Preparing Python project..."
+            ARTIFACT_PATH="$PROJECT_PATH"
+
+          else
+            echo "⚠️ Unsupported language: ${{ inputs.language }}"
+            exit 1
+          fi
+
+          echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+
+      # 3️⃣ Configure AWS credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      # 4️⃣ Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 5️⃣ Build and push Docker image
+      - name: Build and Push Docker image
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPO=${{ vars.AWS_ECR_REPO }}
+          IMAGE_TAG=${{ inputs.image-tag || github.sha }}
+          APP_PATH=${{ steps.build-artifacts.outputs.artifact-path }}
+
+          echo "📦 Building Docker image for ${{ inputs.language }} using artifact $APP_PATH..."
+          docker build --build-arg APP_PATH=$APP_PATH \
+            -t $ECR_REGISTRY/$ECR_REPO:latest \
+            -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
+            -f ${{ inputs.dockerfile-path }} .
+
+          echo "🚀 Pushing Docker image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
+          docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
