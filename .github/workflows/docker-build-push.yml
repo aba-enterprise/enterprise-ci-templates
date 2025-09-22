@@ -92,6 +92,7 @@ jobs:
           fi
 
           echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+          echo "artifact-path=$ARTIFACT_PATH"
 
       # 3️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
