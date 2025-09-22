@@ -46,6 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment }}
+    env:
+      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
 
     permissions:
       id-token: write
