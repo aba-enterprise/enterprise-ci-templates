@@ -1,86 +1,68 @@
-name: "Reusable CodeQL Advanced"
+name: CodeQL Security Scan (Reusable)
 
 on:
   workflow_call:
     inputs:
-      languages:
-        description: "Languages to scan (comma separated or matrix)"
+      language:
+        description: "Programming language to scan (csharp, java, javascript, python, go, cpp, ruby)"
         required: true
         type: string
-      build-mode:
-        description: "Build mode (none, autobuild, manual)"
-        required: false
-        type: string
-        default: "none"
-      dotnet-version:
-        description: ".NET version (if using csharp)"
-        required: false
-        type: string
-        default: "8.0.x"
       projectPath:
-        required: true
+        description: "Project path for build (required for .NET or multi-project builds)"
+        required: false
         type: string
-      # testProjectPath:
-      #   required: true
-      #   type: string
+      buildCommand:
+        description: "Optional build command, if the language requires a build"
+        required: false
+        type: string
       run-codeql-gate-check:
         description: "Run CodeQL alert check? (yes/no)"
         type: string
         required: false
         default: "yes"
 
-permissions:
-  security-events: write
-  packages: read
-  actions: read
-  contents: read
-
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ${{ fromJSON(inputs.languages) }}
+  codeql-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     steps:
+      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup runtime (only when needed)
-      - name: Setup .NET
-        if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
+      # 2️⃣ Initialize CodeQL for the specified language
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ inputs.build-mode }}
+          languages: ${{ inputs.language }}
 
-      - name: Restore NuGet packages
-        run: dotnet restore
-      
-      - name: Run Tests with Coverage
-        continue-on-error: true
-        run: |
-          dotnet test --collect:"XPlat Code Coverage"
-      
-      # Handle manual build (if requested)
-      # - if: inputs.build-mode == 'manual' && matrix.language == 'csharp'
-      - name: Publish code
-        run: |
-          # echo "⚙️ Running manual build & publish for C#"
-          dotnet publish ${{ inputs.projectPath }} -c Release -o publishoutput
+      # 3️⃣ Restore dependencies for .NET only
+      - name: Restore .NET dependencies
+        if: ${{ inputs.language == 'csharp' && inputs.projectPath != '' }}
+        run: dotnet restore ${{ inputs.projectPath }}
 
-      # Run CodeQL Analysis
+      # 4️⃣ Build project if build command is provided
+      - name: Build project (if needed)
+        if: ${{ inputs.buildCommand != '' }}
+        run: ${{ inputs.buildCommand }}
+
+      # 5️⃣ Run CodeQL analysis
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
 
+       # 6️⃣  Upload publish artifacts (only for C#)
+      - name: Upload publish artifacts
+        if: ${{ inputs.language == 'csharp' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-publish
+          path: publishoutput/
+      
+      #  CodeQl Gate
       - name: Check CodeQL Alerts
         run: |
           echo "🔎 Checking CodeQL alerts for branch ${GITHUB_REF}..."
@@ -118,11 +100,3 @@ jobs:
             else
                 echo "✅ No critical/high findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
             fi
-      
-      # Upload artifacts (only for csharp builds that produced publishoutput/)
-      - name: Upload publish artifacts
-        if: matrix.language == 'csharp'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dotnet-publish
-          path: publishoutput/

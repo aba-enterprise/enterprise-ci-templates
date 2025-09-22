@@ -1,0 +1,159 @@
+name: SonarQube Analysis (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "Programming language (csharp, java, javascript, python, go, cpp)"
+        required: true
+        type: string
+      languageVersion:
+        description: "Version of the language/runtime to use"
+        required: false
+        type: string
+        default: ""  # If empty, use default version
+      projectKey:
+        description: "SonarQube project key"
+        required: true
+        type: string
+      organizationKey:
+        description: "SonarQube organization key"
+        required: true
+        type: string
+      projectPath:
+        description: "Path to project/solution (optional, for multi-module projects)"
+        required: false
+        type: string
+      testProjectPath:
+        description: "Path to test project/folder (optional)"
+        required: false
+        type: string
+      buildCommand:
+        description: "Optional build command if needed"
+        required: false
+        type: string
+      run-sonarqube-gate-check:
+        description: "Run SonarQube Quality Gate check? (yes/no)"
+        required: false
+        default: "yes"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup environment based on language + version
+      - name: Setup .NET SDK
+        if: ${{ inputs.language == 'csharp' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '8.0.x' }}
+
+      - name: Setup Java
+        if: ${{ inputs.language == 'java' }}
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '17' }}
+
+      - name: Setup Node.js
+        if: ${{ inputs.language == 'javascript' || inputs.language == 'typescript' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '20' }}
+
+      - name: Setup Python
+        if: ${{ inputs.language == 'python' }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '3.11' }}
+
+      - name: Setup Go
+        if: ${{ inputs.language == 'go' }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '1.21' }}
+
+      # 3️⃣ Restore / install dependencies
+      - name: Restore .NET dependencies
+        if: ${{ inputs.language == 'csharp' && inputs.projectPath != '' }}
+        run: dotnet restore ${{ inputs.projectPath }}
+
+      - name: Install Node dependencies
+        if: ${{ inputs.language == 'javascript' || inputs.language == 'typescript' }}
+        run: npm install
+
+      - name: Install Python dependencies
+        if: ${{ inputs.language == 'python' && inputs.projectPath != '' }}
+        run: pip install -r ${{ inputs.projectPath }}/requirements.txt
+
+      # 4️⃣ Build project if needed
+      - name: Build project
+        if: ${{ inputs.buildCommand != '' }}
+        run: ${{ inputs.buildCommand }}
+
+      # 5️⃣ Run tests (optional)
+      - name: Run tests (.NET)
+        if: ${{ inputs.language == 'csharp' && inputs.testProjectPath != '' }}
+        run: |
+          mkdir -p ./coverage
+          dotnet test ${{ inputs.testProjectPath }} \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: Run tests (Java)
+        if: ${{ inputs.language == 'java' && inputs.testProjectPath != '' }}
+        run: ./mvnw test -f ${{ inputs.testProjectPath }}
+
+      - name: Run tests (Node)
+        if: ${{ (inputs.language == 'javascript' || inputs.language == 'typescript') && inputs.testProjectPath != '' }}
+        run: npm test --prefix ${{ inputs.testProjectPath }}
+
+      - name: Run tests (Python)
+        if: ${{ inputs.language == 'python' && inputs.testProjectPath != '' }}
+        run: pytest ${{ inputs.testProjectPath }} --junitxml=results.xml
+
+      # 6️⃣ Run SonarScanner
+      - name: Run SonarScanner
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=${{ inputs.projectKey }} \
+            -Dsonar.organization=${{ inputs.organizationKey }} \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+            $([[ "${{ inputs.language }}" == "csharp" ]] && echo "-Dsonar.cs.opencover.reportsPaths=./coverage/**/coverage.opencover.xml") \
+            $([[ "${{ inputs.language }}" == "csharp" ]] && echo "-Dsonar.test.exclusions=**/bin/**,**/obj/**")
+
+      # 7️⃣ Optional: Quality Gate Check
+      - name: Check SonarQube Quality Gate
+        run: |
+          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
+            "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
+            | jq -r '.projectStatus.status')
+
+          echo "Quality Gate status: $STATUS"
+          INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
+          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]]; then
+              if [ "$STATUS" = "OK" ]; then
+                echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
+                # exit 1  # Uncomment to fail the pipeline on gate failure
+              fi
+          else
+            echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no) and current Quality Gate status is: $STATUS." >> $GITHUB_STEP_SUMMARY
+          fi
