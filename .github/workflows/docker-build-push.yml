@@ -7,31 +7,30 @@ on:
         description: "Application language (csharp, java, node, python)"
         required: true
         type: string
-
+      language-version:
+        description: "Version of the runtime (e.g., .NET 8.0, Java 21, Node 20, Python 3.11)"
+        required: true
+        type: string
       project-path:
         description: "Path to the project root"
         required: false
         type: string
         default: "."
-
       dockerfile-path:
         description: "Path to Dockerfile"
         required: false
         type: string
         default: './Dockerfile'
-
       aws-region:
         description: "AWS region for ECR"
         required: false
         type: string
         default: 'us-east-2'
-
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
         type: string
         default: 'dev'
-
       image-tag:
         description: "Docker image tag (optional, default: github.sha)"
         required: false
@@ -53,11 +52,42 @@ jobs:
       actions: read
 
     steps:
+      
       # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Build or use artifacts
+      # 2️⃣ Setup language runtime (for local build/test before Docker image)
+      - name: Setup language runtime
+        run: |
+          if [ "${{ inputs.language }}" == "csharp" ]; then
+            echo "➡️ Installing .NET SDK ${{ inputs.language-version }}"
+            sudo apt-get update
+            sudo apt-get install -y dotnet-sdk-${{ inputs.language-version }}
+
+          elif [ "${{ inputs.language }}" == "java" ]; then
+            echo "➡️ Installing Java ${{ inputs.language-version }}"
+            sudo apt-get update
+            sudo apt-get install -y openjdk-${{ inputs.language-version }}-jdk
+            export JAVA_HOME=/usr/lib/jvm/java-${{ inputs.language-version }}-openjdk-amd64
+            echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
+          elif [ "${{ inputs.language }}" == "node" ]; then
+            echo "➡️ Installing Node.js ${{ inputs.language-version }}"
+            curl -fsSL https://deb.nodesource.com/setup_${{ inputs.language-version }}.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+
+          elif [ "${{ inputs.language }}" == "python" ]; then
+            echo "➡️ Installing Python ${{ inputs.language-version }}"
+            sudo apt-get update
+            sudo apt-get install -y python${{ inputs.language-version }} python${{ inputs.language-version }}-venv
+
+          else
+            echo "⚠️ Unsupported language: ${{ inputs.language }}"
+            exit 1
+          fi
+
+      # 3️⃣ Build or prepare artifacts
       - name: Build artifacts (if needed)
         id: build-artifacts
         run: |
@@ -65,48 +95,41 @@ jobs:
           PROJECT_PATH="${{ inputs.project-path }}"
 
           if [ "${{ inputs.language }}" == "csharp" ]; then
-            echo "🔨 Building C# project..."
             dotnet restore $PROJECT_PATH
             dotnet publish $PROJECT_PATH -c Release -o publishoutput
             ARTIFACT_PATH="publishoutput"
 
           elif [ "${{ inputs.language }}" == "java" ]; then
-            echo "🔨 Building Java project..."
             ./mvnw clean package -DskipTests -f $PROJECT_PATH
             ARTIFACT_PATH="$PROJECT_PATH/target"
 
           elif [ "${{ inputs.language }}" == "node" ]; then
-            echo "🔨 Building Node.js project..."
             cd $PROJECT_PATH
             npm install
             npm run build
             ARTIFACT_PATH="$PROJECT_PATH/dist"
 
           elif [ "${{ inputs.language }}" == "python" ]; then
-            echo "🔨 Preparing Python project..."
             ARTIFACT_PATH="$PROJECT_PATH"
 
-          else
-            echo "⚠️ Unsupported language: ${{ inputs.language }}"
-            exit 1
           fi
 
           echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
           echo "artifact-path=$ARTIFACT_PATH"
 
-      # 3️⃣ Configure AWS credentials
+      # 4️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws-region }}
 
-      # 4️⃣ Login to Amazon ECR
+      # 5️⃣ Login to Amazon ECR
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 5️⃣ Build and push Docker image
+      # 6️⃣ Build and push Docker image
       - name: Build and Push Docker image
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
@@ -114,8 +137,10 @@ jobs:
           IMAGE_TAG=${{ inputs.image-tag || github.sha }}
           APP_PATH=${{ steps.build-artifacts.outputs.artifact-path }}
 
-          echo "📦 Building Docker image for ${{ inputs.language }} using artifact $APP_PATH..."
-          docker build --build-arg APP_PATH=$APP_PATH \
+          echo "📦 Building Docker image for ${{ inputs.language }}:${{ inputs.language-version }}..."
+          docker build \
+            --build-arg APP_PATH=$APP_PATH \
+            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             -t $ECR_REGISTRY/$ECR_REPO:latest \
             -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
             -f ${{ inputs.dockerfile-path }} .
