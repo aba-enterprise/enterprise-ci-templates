@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate commit messages for Jira keys
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
           commits=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"%s")
