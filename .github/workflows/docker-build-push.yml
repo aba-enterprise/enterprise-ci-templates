@@ -132,6 +132,13 @@ jobs:
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           PROJECT_PATH="${{ inputs.project-path }}"
+          ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
+
+          ls -la
+          pwd
+
+          # ARTIFACT_PATH="${{ inputs.project-path }}/output"
+          # mkdir -p "$ARTIFACT_PATH"
 
           echo "📦 Building Docker image for ${{ inputs.language }}..."
 
