@@ -133,12 +133,17 @@ jobs:
           APP_PATH=${{ steps.build-artifacts.outputs.artifact-path }}
 
           echo "📦 Building Docker image..."
+          # docker build \
+          #   --build-arg APP_PATH=$APP_PATH \
+          #   --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
+          #   -t $ECR_REGISTRY/$ECR_REPO:latest \
+          #   -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
+          #   -f ${{ inputs.dockerfile-path }} .
           docker build \
-            --build-arg APP_PATH=$APP_PATH \
-            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
-            -t $ECR_REGISTRY/$ECR_REPO:latest \
-            -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
-            -f ${{ inputs.dockerfile-path }} .
+            --build-arg LANGUAGE=${{ inputs.language }} \
+            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }}  \
+            --build-arg APP_PATH=output \
+            -t myapp-dotnet:latest .
 
           echo "🚀 Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPO:latest
