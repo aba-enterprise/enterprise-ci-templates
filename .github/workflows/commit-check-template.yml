@@ -17,17 +17,28 @@ jobs:
   commit-lint:
     runs-on: ubuntu-latest
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
+      # 2️⃣ Validate commit messages for Jira keys
       - name: Validate commit messages for Jira keys
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
-          commits=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"%s")
+          
+          # Determine commit range
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          fi
+
+          commits=$(git log $range --pretty=format:"%s")
           missing=0
+
           echo "$commits" | while IFS= read -r msg; do
             if ! echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
               echo "❌ Commit missing Jira key: $msg"
@@ -40,6 +51,7 @@ jobs:
             exit 1
           fi
 
+      # 3️⃣ Check PR title for Jira key (only for PRs)
       - name: Check PR title for Jira key
         if: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -52,5 +64,6 @@ jobs:
           fi
           echo "✅ PR title contains Jira key: $pr_title"
 
+      # 4️⃣ Success
       - name: Success
         run: echo "✅ All commits and PR title include Jira ticket!"
