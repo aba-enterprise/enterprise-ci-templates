@@ -1,0 +1,171 @@
+name: Reusable ECS Task + Service Deployment
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: "ECS Service Name"
+        required: true
+        type: string
+      task-family:
+        description: "Task Definition Family"
+        required: true
+        type: string
+      container-name:
+        description: "Container Name"
+        required: true
+        type: string
+      desired-count:
+        description: "Number of tasks"
+        required: false
+        type: string
+        default: "1"
+      cpu:
+        description: "Task CPU Units"
+        required: false
+        type: string
+        default: "256"
+      memory:
+        description: "Task Memory (MiB)"
+        required: false
+        type: string
+        default: "512"
+      image-tag:
+        description: "ECR image tag (commit SHA or latest)"
+        required: true
+        type: string
+        default: 'latest'
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
+      language:
+        description: "Application language (csharp, java, node, python)"
+        required: true
+        type: string
+      extra-env:
+        description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
+        required: false
+        type: string
+        default: '[]'
+
+jobs:
+  ecs-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # 1️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+          audience: sts.amazonaws.com
+
+      # 2️⃣ Generate Task Definition with conditional and extra env vars
+      - name: Generate ECS Task Definition
+        id: generate-taskdef
+        run: |
+          ECR_IMAGE=${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}
+          LANGUAGE=${{ inputs.language }}
+          ENVIRONMENT=${{ inputs.environment }}
+          CONTAINER_NAME=${{ inputs.container-name }}
+          TASK_FAMILY=${{ inputs.task-family }}
+          EXTRA_ENV=${{ inputs.extra-env }}
+
+          # Base environment variables
+          ENV_VARS=$(jq -n \
+            '[{"name":"LANGUAGE","value": "'"$LANGUAGE"'"}, {"name":"ENVIRONMENT","value": "'"$ENVIRONMENT"'"}, {"name":"PORT","value":"8080"}]')
+
+          # Append language-specific variables
+          if [ "$LANGUAGE" = "csharp" ]; then
+            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
+              '$base + [
+                {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
+                {"name":"DOTNET_USE_POLLING_FILE_WATCHER","value":"true"},
+                {"name":"DOTNET_SKIP_FIRST_TIME_EXPERIENCE","value":"true"},
+                {"name":"DOTNET_NOLOGO","value":"true"},
+                {"name":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT","value":"true"},
+                {"name":"ASPNETCORE_URLS","value":"http://+:8080"}
+              ]')
+          elif [ "$LANGUAGE" = "java" ]; then
+            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
+              '$base + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
+          elif [ "$LANGUAGE" = "node" ]; then
+            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
+              '$base + [{"name":"NODE_ENV","value":"production"}]')
+          elif [ "$LANGUAGE" = "python" ]; then
+            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
+              '$base + [{"name":"PYTHONUNBUFFERED","value":"1"}]')
+          fi
+
+          # Merge extra environment variables
+          if [ "$EXTRA_ENV" != "[]" ]; then
+            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" --argjson extra "$EXTRA_ENV" '$base + $extra')
+          fi
+
+          # Generate task definition
+          cat <<EOF > task-def.json
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "$CONTAINER_NAME",
+                "image": "$ECR_IMAGE",
+                "portMappings": [
+                  { "containerPort": 8080, "protocol": "tcp" }
+                ],
+                "essential": true,
+                "environment": $ENV_VARS,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/$TASK_FAMILY",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "${{ inputs.cpu }}",
+            "memory": "${{ inputs.memory }}"
+          }
+          EOF
+
+      # 3️⃣ Register ECS Task Definition
+      - name: Register ECS Task Definition
+        run: |
+          aws ecs register-task-definition --cli-input-json file://task-def.json
+
+      # 4️⃣ Create or Update ECS Service
+      - name: Create or Update ECS Service ${{ inputs.environment }}
+        run: |
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
+          SERVICE_NAME=${{ inputs.service-name }}
+          TASK_FAMILY=${{ inputs.task-family }}
+
+          if aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].status' --output text | grep -q "ACTIVE"; then
+            echo "Updating existing ECS service..."
+            aws ecs update-service \
+              --cluster $CLUSTER_NAME \
+              --service $SERVICE_NAME \
+              --task-definition $TASK_FAMILY
+          else
+            echo "Creating new ECS service..."
+            aws ecs create-service \
+              --cluster $CLUSTER_NAME \
+              --service-name $SERVICE_NAME \
+              --task-definition $TASK_FAMILY \
+              --desired-count ${{ inputs.desired-count }} \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${{ vars.AWS_SUBNETS }}],securityGroups=[${{ vars.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
