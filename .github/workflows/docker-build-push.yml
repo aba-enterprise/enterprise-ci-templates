@@ -134,12 +134,12 @@ jobs:
           PROJECT_PATH="${{ inputs.project-path }}"
           ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
 
-          echo "A part 1 - $ARTIFACT_PATH"
+          # echo "A part 1 - $ARTIFACT_PATH"
 
-          ARTIFACT_PATH="${{ inputs.project-path }}/output"
-          echo "A part 2 - $ARTIFACT_PATH"
-          mkdir -p "$ARTIFACT_PATH"
-          echo "A part 3 - $ARTIFACT_PATH"
+          # ARTIFACT_PATH="${{ inputs.project-path }}/output"
+          # echo "A part 2 - $ARTIFACT_PATH"
+          # mkdir -p "$ARTIFACT_PATH"
+          # echo "A part 3 - $ARTIFACT_PATH"
 
           echo "📦 Building Docker image for ${{ inputs.language }}..."
 
@@ -150,7 +150,7 @@ jobs:
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
-            --build-arg APP_PATH=./output \
+            --build-arg APP_PATH=./$ARTIFACT_PATH" \
             -f "$DOCKERFILE" \
             -t "$ECR_REGISTRY/$ECR_REPO:latest" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
