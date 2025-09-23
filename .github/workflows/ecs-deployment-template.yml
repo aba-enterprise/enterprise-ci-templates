@@ -107,8 +107,8 @@ jobs:
           fi
 
           # Merge extra environment variables
-          if [ "$EXTRA_ENV" != "[]" ]; then
-            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" --argjson extra "$EXTRA_ENV" '$base + $extra')
+          if [ "$EXTRA_ENV" != "[]" ] && [ -n "$EXTRA_ENV" ]; then
+            ENV_VARS=$(echo "$ENV_VARS" | jq --argjson extra "$EXTRA_ENV" '. + $extra')
           fi
 
           # Generate task definition
