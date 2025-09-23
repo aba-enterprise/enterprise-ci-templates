@@ -8,16 +8,16 @@ on:
         required: true
         type: string
       language-version:
-        description: "Version of the runtime (e.g., .NET 8.0, Java 21, Node 20, Python 3.11)"
+        description: "Runtime version (e.g., .NET 8, Java 17, Node 20, Python 3.11)"
         required: true
         type: string
       project-path:
-        description: "Path to the project root"
+        description: "Project root path"
         required: false
         type: string
         default: "."
       dockerfile-path:
-        description: "Path to Dockerfile"
+        description: "Dockerfile path"
         required: false
         type: string
         default: './Dockerfile'
@@ -32,7 +32,7 @@ on:
         type: string
         default: 'dev'
       image-tag:
-        description: "Docker image tag (optional, default: github.sha)"
+        description: "Optional Docker image tag (default: github.sha)"
         required: false
         type: string
 
@@ -48,16 +48,13 @@ jobs:
       id-token: write
       contents: read
       packages: write
-      security-events: write
-      actions: read
 
     steps:
-
       # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup language runtime (for local build/test before Docker image)
+      # 2️⃣ Setup language runtime (best practice)
       - name: Setup .NET SDK
         if: ${{ inputs.language == 'csharp' }}
         uses: actions/setup-dotnet@v4
@@ -68,7 +65,7 @@ jobs:
         if: ${{ inputs.language == 'java' }}
         uses: actions/setup-java@v4
         with:
-          distribution: temurin   # Options: temurin, zulu, microsoft, adopt, etc.
+          distribution: temurin
           java-version: ${{ inputs.language-version }}
 
       - name: Setup Node.js
@@ -83,10 +80,13 @@ jobs:
         with:
           python-version: ${{ inputs.language-version }}
 
+      # 3️⃣ Build artifacts → standardized output folder
       - name: Build artifacts
+        id: build-artifacts
         run: |
           ARTIFACT_PATH="output"
           PROJECT_PATH="${{ inputs.project-path }}"
+          mkdir -p $ARTIFACT_PATH
 
           if [ "${{ inputs.language }}" == "csharp" ]; then
             dotnet restore $PROJECT_PATH
@@ -94,19 +94,20 @@ jobs:
 
           elif [ "${{ inputs.language }}" == "java" ]; then
             ./mvnw clean package -DskipTests -f $PROJECT_PATH
-            mkdir -p $ARTIFACT_PATH
             cp $PROJECT_PATH/target/*.jar $ARTIFACT_PATH/
 
           elif [ "${{ inputs.language }}" == "node" ]; then
             cd $PROJECT_PATH
             npm install
             npm run build
-            mkdir -p $ARTIFACT_PATH
             cp -r dist/* $ARTIFACT_PATH/
 
           elif [ "${{ inputs.language }}" == "python" ]; then
-            mkdir -p $ARTIFACT_PATH
-            cp -r $PROJECT_PATH/* $ARTIFACT_PATH
+            cp -r $PROJECT_PATH/* $ARTIFACT_PATH/
+
+          else
+            echo "⚠️ Unsupported language: ${{ inputs.language }}"
+            exit 1
           fi
 
           echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
@@ -128,10 +129,10 @@ jobs:
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
-          IMAGE_TAG=${{ inputs.image-tag || github.sha }}
+          IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           APP_PATH=${{ steps.build-artifacts.outputs.artifact-path }}
 
-          echo "📦 Building Docker image for ${{ inputs.language }}:${{ inputs.language-version }}..."
+          echo "📦 Building Docker image..."
           docker build \
             --build-arg APP_PATH=$APP_PATH \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
