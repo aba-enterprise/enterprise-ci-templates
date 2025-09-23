@@ -134,11 +134,12 @@ jobs:
           PROJECT_PATH="${{ inputs.project-path }}"
           ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
 
-          ls -la
+          ls -R
           pwd
 
           ARTIFACT_PATH="${{ inputs.project-path }}/output"
-          # mkdir -p "$ARTIFACT_PATH"
+          mkdir -p "$ARTIFACT_PATH"
+          ls -la
 
           echo "📦 Building Docker image for ${{ inputs.language }}..."
 
