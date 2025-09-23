@@ -134,6 +134,13 @@ jobs:
           PROJECT_PATH="${{ inputs.project-path }}"
           ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
 
+          ls -la
+          pwd
+          ls -l ARTIFACT_PATH
+
+          ARTIFACT_PATH="${{ inputs.project-path }}/output"
+          mkdir -p "$ARTIFACT_PATH"
+
           echo "📦 Building Docker image for ${{ inputs.language }}..."
 
           # Use project folder as build context and Dockerfile path if customized
