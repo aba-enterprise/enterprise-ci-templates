@@ -137,7 +137,7 @@ jobs:
           ls -la
           pwd
 
-          # ARTIFACT_PATH="${{ inputs.project-path }}/output"
+          ARTIFACT_PATH="${{ inputs.project-path }}/output"
           # mkdir -p "$ARTIFACT_PATH"
 
           echo "📦 Building Docker image for ${{ inputs.language }}..."
