@@ -150,7 +150,7 @@ jobs:
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
-            --build-arg APP_PATH=./$ARTIFACT_PATH" \
+            --build-arg APP_PATH=""./$ARTIFACT_PATH" \
             -f "$DOCKERFILE" \
             -t "$ECR_REGISTRY/$ECR_REPO:latest" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
