@@ -58,64 +58,58 @@ jobs:
         uses: actions/checkout@v3
 
       # 2️⃣ Setup language runtime (for local build/test before Docker image)
-      - name: Setup language runtime
+      - name: Setup .NET SDK
+        if: ${{ inputs.language == 'csharp' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.language-version }}
+
+      - name: Setup Java
+        if: ${{ inputs.language == 'java' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin   # Options: temurin, zulu, microsoft, adopt, etc.
+          java-version: ${{ inputs.language-version }}
+
+      - name: Setup Node.js
+        if: ${{ inputs.language == 'node' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.language-version }}
+
+      - name: Setup Python
+        if: ${{ inputs.language == 'python' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.language-version }}
+
+      - name: Build artifacts
         run: |
-          if [ "${{ inputs.language }}" == "csharp" ]; then
-            echo "➡️ Installing .NET SDK ${{ inputs.language-version }}"
-            sudo apt-get update
-            sudo apt-get install -y dotnet-sdk-${{ inputs.language-version }}
-
-          elif [ "${{ inputs.language }}" == "java" ]; then
-            echo "➡️ Installing Java ${{ inputs.language-version }}"
-            sudo apt-get update
-            sudo apt-get install -y openjdk-${{ inputs.language-version }}-jdk
-            export JAVA_HOME=/usr/lib/jvm/java-${{ inputs.language-version }}-openjdk-amd64
-            echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-
-          elif [ "${{ inputs.language }}" == "node" ]; then
-            echo "➡️ Installing Node.js ${{ inputs.language-version }}"
-            curl -fsSL https://deb.nodesource.com/setup_${{ inputs.language-version }}.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-
-          elif [ "${{ inputs.language }}" == "python" ]; then
-            echo "➡️ Installing Python ${{ inputs.language-version }}"
-            sudo apt-get update
-            sudo apt-get install -y python${{ inputs.language-version }} python${{ inputs.language-version }}-venv
-
-          else
-            echo "⚠️ Unsupported language: ${{ inputs.language }}"
-            exit 1
-          fi
-
-      # 3️⃣ Build or prepare artifacts
-      - name: Build artifacts (if needed)
-        id: build-artifacts
-        run: |
-          ARTIFACT_PATH=""
+          ARTIFACT_PATH="output"
           PROJECT_PATH="${{ inputs.project-path }}"
 
           if [ "${{ inputs.language }}" == "csharp" ]; then
             dotnet restore $PROJECT_PATH
-            dotnet publish $PROJECT_PATH -c Release -o publishoutput
-            ARTIFACT_PATH="publishoutput"
+            dotnet publish $PROJECT_PATH -c Release -o $ARTIFACT_PATH
 
           elif [ "${{ inputs.language }}" == "java" ]; then
             ./mvnw clean package -DskipTests -f $PROJECT_PATH
-            ARTIFACT_PATH="$PROJECT_PATH/target"
+            mkdir -p $ARTIFACT_PATH
+            cp $PROJECT_PATH/target/*.jar $ARTIFACT_PATH/
 
           elif [ "${{ inputs.language }}" == "node" ]; then
             cd $PROJECT_PATH
             npm install
             npm run build
-            ARTIFACT_PATH="$PROJECT_PATH/dist"
+            mkdir -p $ARTIFACT_PATH
+            cp -r dist/* $ARTIFACT_PATH/
 
           elif [ "${{ inputs.language }}" == "python" ]; then
-            ARTIFACT_PATH="$PROJECT_PATH"
-
+            mkdir -p $ARTIFACT_PATH
+            cp -r $PROJECT_PATH/* $ARTIFACT_PATH
           fi
 
           echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
-          echo "artifact-path=$ARTIFACT_PATH"
 
       # 4️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
