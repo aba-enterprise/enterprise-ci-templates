@@ -111,6 +111,7 @@ jobs:
           fi
 
           echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+          echo "artifact-path is = $ARTIFACT_PATH"
 
       # 4️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
@@ -127,18 +128,26 @@ jobs:
       # 6️⃣ Build and push Docker image
       - name: Build and Push Docker image
         run: |
+          # ECR info
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
+          
+          # Build artifacts folder (from previous step)
           APP_PATH=${{ steps.build-artifacts.outputs.artifact-path }}
+          
+          # Dockerfile path
+          DOCKERFILE=${{ inputs.dockerfile-path }}
 
-          echo "📦 Building Docker image..."
-         
+          echo "📦 Building Docker image for ${{ inputs.language }}..."
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
-            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }}  \
-            --build-arg APP_PATH=output \
-            -t myapp-dotnet:latest .
+            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
+            --build-arg APP_PATH=$APP_PATH \
+            -f $DOCKERFILE \
+            -t $ECR_REGISTRY/$ECR_REPO:latest \
+            -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
+            ${{ inputs.project-path }}
 
           echo "🚀 Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPO:latest
