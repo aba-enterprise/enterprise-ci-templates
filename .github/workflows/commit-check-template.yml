@@ -1,10 +1,10 @@
-name: "Commit Message Jira Check (Reusable)"
+name: "Commit Message & Jira Checks (Reusable)"
 
 on:
   workflow_call:
     inputs:
       base_branch:
-        description: "Base branch for comparison"
+        description: "Base branch for comparison (used when not in a PR)"
         required: true
         type: string
 
@@ -17,12 +17,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 🔍 Commit message check
       - name: Validate commit messages for Jira keys
-        if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
-          commits=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"%s")
           missing=0
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "📌 Event is pull_request → using PR base/head SHAs"
+            commits=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"%s")
+          else
+            echo "📌 Event is workflow_call → comparing against base_branch input"
+            git fetch origin ${{ inputs.base_branch }}
+            commits=$(git log origin/${{ inputs.base_branch }}..HEAD --pretty=format:"%s")
+          fi
+
           echo "$commits" | while IFS= read -r msg; do
             if ! echo "$msg" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
               echo "❌ Commit missing Jira key: $msg"
@@ -35,9 +44,7 @@ jobs:
             exit 1
           fi
 
-      # -----------------------------
-      #  Check PR title (if exists)
-      # -----------------------------
+      # 🔍 PR title check
       - name: Check PR title for Jira key
         if: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -50,5 +57,17 @@ jobs:
           fi
           echo "✅ PR title contains Jira key: $pr_title"
 
+      # # 🔍 Branch name check
+      # - name: Check branch name for Jira key
+      #   run: |
+      #     echo "🔍 Checking branch name for Jira key..."
+      #     branch_name="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+      #     echo "Branch name = $branch_name"
+      #     if ! echo "$branch_name" | grep -qE "([A-Z][A-Z0-9]+-[0-9]+)"; then
+      #       echo "❌ Branch name missing Jira key: $branch_name"
+      #       exit 1
+      #     fi
+      #     echo "✅ Branch name contains Jira key: $branch_name"
+
       - name: Success
-        run: echo "✅ All commits and PR title include Jira ticket!"
+        run: echo "✅ All commits, PR title, and branch name include Jira ticket!"
