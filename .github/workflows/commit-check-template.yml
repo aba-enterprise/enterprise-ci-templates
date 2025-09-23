@@ -36,12 +36,16 @@ jobs:
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
 
+          # Get commit messages
           commits=$(git log $range --pretty=format:"%s")
           missing=0
 
+          echo "📋 Commits in range $range:"
           echo "$commits" | while IFS= read -r msg; do
-            if ! echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
-              echo "❌ Commit missing Jira key: $msg"
+            if echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
+              echo "✅ $msg"
+            else
+              echo "❌ $msg (missing Jira key)"
               missing=1
             fi
           done
@@ -49,6 +53,8 @@ jobs:
           if [ "$missing" -eq 1 ]; then
             echo "❌ One or more commits do not include a Jira ticket. Please fix commit messages."
             exit 1
+          else
+            echo "✅ All commits include Jira ticket numbers."
           fi
 
       # 3️⃣ Check PR title for Jira key (only for PRs)
