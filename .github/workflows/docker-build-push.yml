@@ -183,7 +183,7 @@ jobs:
             --build-arg APP_PATH="$ARTIFACT_PATH" \
             -f "${{ inputs.dockerfile-path }}" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH"
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH" \
             "$PROJECT_PATH"
 
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
