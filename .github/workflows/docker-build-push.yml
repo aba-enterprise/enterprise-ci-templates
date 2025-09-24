@@ -104,7 +104,7 @@ jobs:
               "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH"
             else
               echo "Using system Maven..."
-              mvn clean package -DskipTests -f "$PROJECT_PATH"
+              mvn clean package -DskipTests
             fi
             cp "$PROJECT_PATH/target/"*.jar "$ARTIFACT_PATH/"
 
