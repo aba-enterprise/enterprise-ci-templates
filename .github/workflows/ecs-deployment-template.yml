@@ -161,19 +161,21 @@ jobs:
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME=${{ inputs.service-name }}
           TASK_FAMILY=${{ inputs.task-family }}
+          DESIRED_COUNT=${{ inputs.desired-count }}
 
-          if aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].status' --output text | grep -q "ACTIVE"; then
+          if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].status' --output text | grep -q "ACTIVE"; then
             echo "Updating existing ECS service..."
             aws ecs update-service \
-              --cluster $CLUSTER_NAME \
-              --service $SERVICE_NAME \
-              --task-definition $TASK_FAMILY
+              --cluster "$CLUSTER_NAME" \
+              --service "$SERVICE_NAME" \
+              --task-definition "$TASK_FAMILY"
           else
             echo "Creating new ECS service..."
             aws ecs create-service \
-              --cluster $CLUSTER_NAME \
-              --service-name $SERVICE_NAME \
-              --task-definition $TASK_FAMILY \
-              --desired-count ${{ inputs.desired-count }} \
+              --cluster "$CLUSTER_NAME" \
+              --service-name "$SERVICE_NAME" \
+              --task-definition "$TASK_FAMILY" \
+              --desired-count "$DESIRED_COUNT" \
               --launch-type FARGATE \
-              --network-configuration "awsvpcConfiguration={subnets=[${{ vars.AWS_SUBNETS }}],securityGroups=[${{ vars.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
+              --network-configuration '{"awsvpcConfiguration":{"subnets":["'"${{ vars.AWS_SUBNETS }}"'"],"securityGroups":["'"${{ vars.AWS_SECURITY_GROUPS }}"'"],"assignPublicIp":"ENABLED"}}'
+          fi
