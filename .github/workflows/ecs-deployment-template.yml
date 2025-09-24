@@ -77,7 +77,7 @@ jobs:
           REPO_NAME=$(basename $GITHUB_REPOSITORY)       # get repo name only
           BRANCH_NAME=$GITHUB_REF_NAME                   # branch name
           SHORT_SHA=${GITHUB_SHA::7}                     # first 7 chars of SHA
-          IMAGE_TAG="${REPO_NAME}-${SHORT_SHA}"
+          IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
 
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           LANGUAGE="${{ inputs.language }}"
