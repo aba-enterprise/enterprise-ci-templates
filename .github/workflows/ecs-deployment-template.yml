@@ -78,9 +78,11 @@ jobs:
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}"
           LANGUAGE="${{ inputs.language }}"
           ENVIRONMENT="${{ inputs.environment }}"
-          CONTAINER_NAME="${{ inputs.container-name }}"
-          TASK_FAMILY="${{ inputs.task-family }}"
           EXTRA_ENV="${{ inputs.extra-env }}"
+          # Default SERVICE_NAME, TASK_FAMILY, CONTAINER_NAME to repo name if user input is empty
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
 
           # Base env variables from caller
           ENV_VARS=$(jq -n \
@@ -159,13 +161,13 @@ jobs:
       - name: Create or Update ECS Service ${{ inputs.environment }}
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
-          # SERVICE_NAME=${{ inputs.service-name }}
-          # TASK_FAMILY=${{ inputs.task-family }}
+
           DESIRED_COUNT=${{ inputs.desired-count }}
 
-          SERVICE_NAME=$(basename $GITHUB_REPOSITORY)-${GITHUB_REF##*/}  # e.g., myapp-feature1
-          TASK_FAMILY=$SERVICE_NAME-task
-          CONTAINER_NAME=$SERVICE_NAME-container
+          # Default SERVICE_NAME, TASK_FAMILY, CONTAINER_NAME to repo name if user input is empty
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
 
           # Convert GitHub vars into proper JSON arrays
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
