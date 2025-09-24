@@ -98,7 +98,13 @@ jobs:
             dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
 
           elif [ "${{ inputs.language }}" == "java" ]; then
-            ./mvnw clean package -DskipTests -f "$PROJECT_PATH"
+            if [ -f "$PROJECT_PATH/mvnw" ]; then
+              echo "Using Maven Wrapper..."
+              "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH"
+            else
+              echo "Using system Maven..."
+              mvn clean package -DskipTests -f "$PROJECT_PATH"
+            fi
             cp "$PROJECT_PATH"/target/*.jar "$ARTIFACT_PATH/"
 
           elif [ "${{ inputs.language }}" == "node" ]; then
