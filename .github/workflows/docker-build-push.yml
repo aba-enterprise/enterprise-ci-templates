@@ -106,7 +106,8 @@ jobs:
               echo "Using system Maven..."
               mvn clean package -DskipTests
             fi
-            cp "$PROJECT_PATH/target/"*.jar "$ARTIFACT_PATH/"
+            ls -la
+            cp target/*.jar "$ARTIFACT_PATH/"
 
           elif [ "${{ inputs.language }}" == "node" ]; then
             cd "$PROJECT_PATH"
