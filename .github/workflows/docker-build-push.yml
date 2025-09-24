@@ -172,11 +172,10 @@ jobs:
           # Correct tag format
           IMAGE_TAG="${SERVICE_NAME}-${IMAGE_TAG_SHORT}"
           IMAGE_TAG_BRANCH="${SERVICE_NAME}-${BRANCH_NAME}"
-          IMAGE_TAG_LATEST="${SERVICE_NAME}-latest"
 
           echo "Build context: $PROJECT_PATH"
           echo "Artifacts path inside context: $ARTIFACT_PATH"
-          echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH, $IMAGE_TAG_LATEST"
+          echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH"
 
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
@@ -184,8 +183,7 @@ jobs:
             --build-arg APP_PATH="$ARTIFACT_PATH" \
             -f "${{ inputs.dockerfile-path }}" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH" \
-            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_LATEST" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH"
             "$PROJECT_PATH"
 
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
