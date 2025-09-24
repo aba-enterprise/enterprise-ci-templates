@@ -93,6 +93,7 @@ jobs:
 
           echo "Building artifacts for ${{ inputs.language }} from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
           ls -la
+          pwd
           if [ "${{ inputs.language }}" == "csharp" ]; then
             dotnet restore "$PROJECT_PATH"
             dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
@@ -103,7 +104,7 @@ jobs:
               "$PROJECT_PATH/mvnw" clean package -DskipTests
             else
               echo "Using system Maven..."
-              mvn -f "$PROJECT_PATH/pom.xml" clean package -DskipTests
+              mvn "$PROJECT_PATH/pom.xml" clean package -DskipTests
             fi
             cp "$PROJECT_PATH"/target/*.jar "$ARTIFACT_PATH/"
 
