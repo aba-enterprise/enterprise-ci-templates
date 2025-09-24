@@ -101,12 +101,12 @@ jobs:
           elif [ "${{ inputs.language }}" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
               echo "Using Maven Wrapper..."
-              "$PROJECT_PATH/mvnw" clean package -DskipTests
+              "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH/pom.xml"
             else
               echo "Using system Maven..."
-              mvn "$PROJECT_PATH/pom.xml" clean package -DskipTests
+              mvn clean package -DskipTests -f "$PROJECT_PATH/pom.xml"
             fi
-            cp "$PROJECT_PATH"/target/*.jar "$ARTIFACT_PATH/"
+            cp "$PROJECT_PATH/target/"*.jar "$ARTIFACT_PATH/"
 
           elif [ "${{ inputs.language }}" == "node" ]; then
             cd "$PROJECT_PATH"
