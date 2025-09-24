@@ -188,5 +188,4 @@ jobs:
 
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH"
-          docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_LATEST"
 
