@@ -84,40 +84,39 @@ jobs:
       - name: Build artifacts
         id: build-artifacts
         run: |
-          ARTIFACT_PATH="output"
           PROJECT_PATH="${{ inputs.project-path }}"
-          
-          # Ensure output folder exists and is empty
-          rm -rf $ARTIFACT_PATH
-          mkdir -p $ARTIFACT_PATH
+          ARTIFACT_PATH="$PROJECT_PATH/output"
 
-          echo "📦 Building artifacts for ${{ inputs.language }}..."
+          # Ensure folder is clean
+          rm -rf "$ARTIFACT_PATH"
+          mkdir -p "$ARTIFACT_PATH"
+
+          echo "Building artifacts for ${{ inputs.language }} into $ARTIFACT_PATH"
 
           if [ "${{ inputs.language }}" == "csharp" ]; then
-            dotnet restore $PROJECT_PATH
-            dotnet publish $PROJECT_PATH -c Release -o $ARTIFACT_PATH
+            dotnet restore "$PROJECT_PATH"
+            dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
 
           elif [ "${{ inputs.language }}" == "java" ]; then
-            ./mvnw clean package -DskipTests -f $PROJECT_PATH
-            cp $PROJECT_PATH/target/*.jar $ARTIFACT_PATH/
+            ./mvnw clean package -DskipTests -f "$PROJECT_PATH"
+            cp "$PROJECT_PATH"/target/*.jar "$ARTIFACT_PATH/"
 
           elif [ "${{ inputs.language }}" == "node" ]; then
-            cd $PROJECT_PATH
+            cd "$PROJECT_PATH"
             npm install
             npm run build
-            cp -r dist/* $ARTIFACT_PATH/
+            cp -r dist/* "$ARTIFACT_PATH/"
 
           elif [ "${{ inputs.language }}" == "python" ]; then
-            cp -r $PROJECT_PATH/* $ARTIFACT_PATH/
+            cp -r "$PROJECT_PATH"/* "$ARTIFACT_PATH/"
 
           else
             echo "⚠️ Unsupported language: ${{ inputs.language }}"
             exit 1
           fi
 
-          # Output artifact path for downstream steps
-          echo "artifact-path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
-          echo "✅ Artifacts built at $ARTIFACT_PATH"
+          # Output for later steps
+          echo "artifact-path=output" >> $GITHUB_OUTPUT
 
       # 4️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
@@ -138,24 +137,21 @@ jobs:
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           PROJECT_PATH="${{ inputs.project-path }}"
-          ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
+          ARTIFACT_PATH="output"
 
-          echo "📦 Building Docker image for ${{ inputs.language }}..."
           echo "Build context: $PROJECT_PATH"
           echo "Artifacts path inside context: $ARTIFACT_PATH"
 
-          DOCKERFILE=${{ inputs.dockerfile-path }}
-
-          # Docker build: use project root as context and relative artifact path
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             --build-arg APP_PATH="$ARTIFACT_PATH" \
-            -f "$DOCKERFILE" \
+            -f "${{ inputs.dockerfile-path }}" \
             -t "$ECR_REGISTRY/$ECR_REPO:latest" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
             "$PROJECT_PATH"
 
-          echo "🚀 Pushing Docker image to ECR..."
+          echo "Pushing Docker image to ECR..."
           docker push "$ECR_REGISTRY/$ECR_REPO:latest"
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
