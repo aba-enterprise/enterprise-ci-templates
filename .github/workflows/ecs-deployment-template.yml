@@ -69,25 +69,29 @@ jobs:
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
-      # 2️⃣ Generate Task Definition with conditional and extra env vars
+      # 2️⃣ Generate Task Definition with dynamic env vars
       - name: Generate ECS Task Definition
         id: generate-taskdef
         run: |
-          ECR_IMAGE=${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}
-          LANGUAGE=${{ inputs.language }}
-          ENVIRONMENT=${{ inputs.environment }}
-          CONTAINER_NAME=${{ inputs.container-name }}
-          TASK_FAMILY=${{ inputs.task-family }}
-          EXTRA_ENV=${{ inputs.extra-env }}
+          set -euo pipefail
 
-          # Base environment variables
+          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}"
+          LANGUAGE="${{ inputs.language }}"
+          ENVIRONMENT="${{ inputs.environment }}"
+          CONTAINER_NAME="${{ inputs.container-name }}"
+          TASK_FAMILY="${{ inputs.task-family }}"
+          EXTRA_ENV="${{ inputs.extra-env }}"
+
+          # Base env variables from caller
           ENV_VARS=$(jq -n \
-            '[{"name":"LANGUAGE","value": "'"$LANGUAGE"'"}, {"name":"ENVIRONMENT","value": "'"$ENVIRONMENT"'"}, {"name":"PORT","value":"8080"}]')
+            --arg lang "$LANGUAGE" \
+            --arg env "$ENVIRONMENT" \
+            '[{"name":"LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
 
-          # Append language-specific variables
-          if [ "$LANGUAGE" = "csharp" ]; then
-            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
-              '$base + [
+          # Add language-specific environment variables
+          case "$LANGUAGE" in
+            csharp)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
                 {"name":"DOTNET_USE_POLLING_FILE_WATCHER","value":"true"},
                 {"name":"DOTNET_SKIP_FIRST_TIME_EXPERIENCE","value":"true"},
@@ -95,23 +99,29 @@ jobs:
                 {"name":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT","value":"true"},
                 {"name":"ASPNETCORE_URLS","value":"http://+:8080"}
               ]')
-          elif [ "$LANGUAGE" = "java" ]; then
-            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
-              '$base + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
-          elif [ "$LANGUAGE" = "node" ]; then
-            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
-              '$base + [{"name":"NODE_ENV","value":"production"}]')
-          elif [ "$LANGUAGE" = "python" ]; then
-            ENV_VARS=$(jq -n --argjson base "$ENV_VARS" \
-              '$base + [{"name":"PYTHONUNBUFFERED","value":"1"}]')
-          fi
+              ;;
+            java)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
+              ;;
+            node)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"}]')
+              ;;
+            python)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"}]')
+              ;;
+          esac
 
-          # Merge extra environment variables
-          if [ "$EXTRA_ENV" != "[]" ] && [ -n "$EXTRA_ENV" ]; then
+          # Merge extra environment variables safely
+          if [ -n "$EXTRA_ENV" ] && [ "$EXTRA_ENV" != "[]" ]; then
+            # Validate JSON first
+            echo "$EXTRA_ENV" | jq . >/dev/null 2>&1 || { echo "❌ ERROR: extra-env is invalid JSON"; exit 1; }
             ENV_VARS=$(echo "$ENV_VARS" | jq --argjson extra "$EXTRA_ENV" '. + $extra')
           fi
 
-          # Generate task definition
+          echo "✅ Final environment variables:"
+          echo "$ENV_VARS"
+
+          # Generate task definition JSON
           cat <<EOF > task-def.json
           {
             "family": "$TASK_FAMILY",
@@ -121,9 +131,7 @@ jobs:
               {
                 "name": "$CONTAINER_NAME",
                 "image": "$ECR_IMAGE",
-                "portMappings": [
-                  { "containerPort": 8080, "protocol": "tcp" }
-                ],
+                "portMappings": [{"containerPort":8080,"protocol":"tcp"}],
                 "essential": true,
                 "environment": $ENV_VARS,
                 "logConfiguration": {
