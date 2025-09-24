@@ -5,15 +5,15 @@ on:
     inputs:
       service-name:
         description: "ECS Service Name"
-        required: true
+        required: false
         type: string
       task-family:
         description: "Task Definition Family"
-        required: true
+        required: false
         type: string
       container-name:
         description: "Container Name"
-        required: true
+        required: false
         type: string
       desired-count:
         description: "Number of tasks"
@@ -159,9 +159,13 @@ jobs:
       - name: Create or Update ECS Service ${{ inputs.environment }}
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
-          SERVICE_NAME=${{ inputs.service-name }}
-          TASK_FAMILY=${{ inputs.task-family }}
+          # SERVICE_NAME=${{ inputs.service-name }}
+          # TASK_FAMILY=${{ inputs.task-family }}
           DESIRED_COUNT=${{ inputs.desired-count }}
+
+          SERVICE_NAME=$(basename $GITHUB_REPOSITORY)-${GITHUB_REF##*/}  # e.g., myapp-feature1
+          TASK_FAMILY=$SERVICE_NAME-task
+          CONTAINER_NAME=$SERVICE_NAME-container
 
           # Convert GitHub vars into proper JSON arrays
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
