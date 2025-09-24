@@ -170,9 +170,9 @@ jobs:
           ENVIRONMENT=${{ inputs.environment }}
 
           # Correct tag format
-          IMAGE_TAG="${SERVICE_NAME}-${ENVIRONMENT}-${IMAGE_TAG_SHORT}"
-          IMAGE_TAG_BRANCH="${SERVICE_NAME}-${ENVIRONMENT}-${BRANCH_NAME}"
-          IMAGE_TAG_LATEST="${SERVICE_NAME}-${ENVIRONMENT}-latest"
+          IMAGE_TAG="${SERVICE_NAME}-${IMAGE_TAG_SHORT}"
+          IMAGE_TAG_BRANCH="${SERVICE_NAME}-${BRANCH_NAME}"
+          IMAGE_TAG_LATEST="${SERVICE_NAME}-latest"
 
           echo "Build context: $PROJECT_PATH"
           echo "Artifacts path inside context: $ARTIFACT_PATH"
