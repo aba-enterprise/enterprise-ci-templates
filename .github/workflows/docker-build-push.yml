@@ -91,7 +91,7 @@ jobs:
           rm -rf "$ARTIFACT_PATH"
           mkdir -p "$ARTIFACT_PATH"
 
-          echo "Building artifacts for ${{ inputs.language }} into $ARTIFACT_PATH"
+          echo "Building artifacts for ${{ inputs.language }} from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
 
           if [ "${{ inputs.language }}" == "csharp" ]; then
             dotnet restore "$PROJECT_PATH"
