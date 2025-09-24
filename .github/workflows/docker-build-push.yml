@@ -133,29 +133,29 @@ jobs:
 
       # 6️⃣ Build and push Docker image
       - name: Build and Push Docker image
-      run: |
-        ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-        ECR_REPO=${{ vars.AWS_ECR_REPO }}
-        IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
-        PROJECT_PATH="${{ inputs.project-path }}"
-        ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPO=${{ vars.AWS_ECR_REPO }}
+          IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
+          PROJECT_PATH="${{ inputs.project-path }}"
+          ARTIFACT_PATH="${{ steps.build-artifacts.outputs.artifact-path }}"
 
-        echo "📦 Building Docker image for ${{ inputs.language }}..."
-        echo "Build context: $PROJECT_PATH"
-        echo "Artifacts path inside context: $ARTIFACT_PATH"
+          echo "📦 Building Docker image for ${{ inputs.language }}..."
+          echo "Build context: $PROJECT_PATH"
+          echo "Artifacts path inside context: $ARTIFACT_PATH"
 
-        DOCKERFILE=${{ inputs.dockerfile-path }}
+          DOCKERFILE=${{ inputs.dockerfile-path }}
 
-        # Docker build: use project root as context and relative artifact path
-        docker build \
-          --build-arg LANGUAGE=${{ inputs.language }} \
-          --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
-          --build-arg APP_PATH="$ARTIFACT_PATH" \
-          -f "$DOCKERFILE" \
-          -t "$ECR_REGISTRY/$ECR_REPO:latest" \
-          -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
-          "$PROJECT_PATH"
+          # Docker build: use project root as context and relative artifact path
+          docker build \
+            --build-arg LANGUAGE=${{ inputs.language }} \
+            --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
+            --build-arg APP_PATH="$ARTIFACT_PATH" \
+            -f "$DOCKERFILE" \
+            -t "$ECR_REGISTRY/$ECR_REPO:latest" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
+            "$PROJECT_PATH"
 
-        echo "🚀 Pushing Docker image to ECR..."
-        docker push "$ECR_REGISTRY/$ECR_REPO:latest"
-        docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+          echo "🚀 Pushing Docker image to ECR..."
+          docker push "$ECR_REGISTRY/$ECR_REPO:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
