@@ -32,9 +32,8 @@ on:
         default: "512"
       image-tag:
         description: "ECR image tag (commit SHA or latest)"
-        required: true
+        required: false
         type: string
-        default: 'latest'
       environment:
         description: "Deployment environment (dev, qa, prod)"
         required: true
@@ -75,7 +74,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${{ inputs.image-tag }}"
+          REPO_NAME=$(basename $GITHUB_REPOSITORY)       # get repo name only
+          BRANCH_NAME=$GITHUB_REF_NAME                   # branch name
+          SHORT_SHA=${GITHUB_SHA::7}                     # first 7 chars of SHA
+          IMAGE_TAG="${REPO_NAME}-${SHORT_SHA}"
+
+          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           LANGUAGE="${{ inputs.language }}"
           ENVIRONMENT="${{ inputs.environment }}"
           EXTRA_ENV="${{ inputs.extra-env }}"
