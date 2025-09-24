@@ -92,7 +92,7 @@ jobs:
           mkdir -p "$ARTIFACT_PATH"
 
           echo "Building artifacts for ${{ inputs.language }} from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
-
+          ls -la
           if [ "${{ inputs.language }}" == "csharp" ]; then
             dotnet restore "$PROJECT_PATH"
             dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
@@ -100,10 +100,10 @@ jobs:
           elif [ "${{ inputs.language }}" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
               echo "Using Maven Wrapper..."
-              "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH"
+              "$PROJECT_PATH/mvnw" clean package -DskipTests
             else
               echo "Using system Maven..."
-              mvn clean package -DskipTests -f "$PROJECT_PATH"
+              mvn -f "$PROJECT_PATH/pom.xml" clean package -DskipTests
             fi
             cp "$PROJECT_PATH"/target/*.jar "$ARTIFACT_PATH/"
 
