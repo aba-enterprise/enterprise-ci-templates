@@ -147,19 +147,49 @@ jobs:
           PROJECT_PATH="${{ inputs.project-path }}"
           ARTIFACT_PATH="output"
 
+          # echo "Build context: $PROJECT_PATH"
+          # echo "Artifacts path inside context: $ARTIFACT_PATH"
+
+          # docker build \
+          #   --build-arg LANGUAGE=${{ inputs.language }} \
+          #   --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
+          #   --build-arg APP_PATH="$ARTIFACT_PATH" \
+          #   -f "${{ inputs.dockerfile-path }}" \
+          #   -t "$ECR_REGISTRY/$ECR_REPO:latest" \
+          #   -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
+          #   "$PROJECT_PATH"
+
+          # echo "Pushing Docker image to ECR..."
+          # docker push "$ECR_REGISTRY/$ECR_REPO:latest"
+          # docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
+          # Service and branch info
+          SERVICE_NAME=$(basename ${{ github.repository }})
+          BRANCH_NAME=${GITHUB_REF##*/}
+          IMAGE_TAG_SHORT=$(echo $GITHUB_SHA | cut -c1-7)
+          ENVIRONMENT=${{ inputs.environment }}
+
+          # Build tags
+          IMAGE_TAG="${SERVICE_NAME}-${ENVIRONMENT}:${IMAGE_TAG_SHORT}"
+          IMAGE_TAG_BRANCH="${SERVICE_NAME}-${ENVIRONMENT}:${BRANCH_NAME}"
+          IMAGE_TAG_LATEST="${SERVICE_NAME}-${ENVIRONMENT}:latest"
+
           echo "Build context: $PROJECT_PATH"
           echo "Artifacts path inside context: $ARTIFACT_PATH"
+          echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH, $IMAGE_TAG_LATEST"
 
           docker build \
             --build-arg LANGUAGE=${{ inputs.language }} \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             --build-arg APP_PATH="$ARTIFACT_PATH" \
             -f "${{ inputs.dockerfile-path }}" \
-            -t "$ECR_REGISTRY/$ECR_REPO:latest" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_LATEST" \
             "$PROJECT_PATH"
 
-          echo "Pushing Docker image to ECR..."
-          docker push "$ECR_REGISTRY/$ECR_REPO:latest"
+          echo "Pushing Docker images..."
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH"
+          docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_LATEST"
 
