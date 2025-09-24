@@ -172,7 +172,9 @@ jobs:
             aws ecs update-service \
               --cluster "$CLUSTER_NAME" \
               --service "$SERVICE_NAME" \
-              --task-definition "$TASK_FAMILY"
+              --task-definition "$TASK_FAMILY" \
+              --desired-count "$DESIRED_COUNT" \
+              --force-new-deployment
           else
             echo "Creating new ECS service..."
             aws ecs create-service \
@@ -190,25 +192,8 @@ jobs:
               }"
           fi
 
-          # if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].status' --output text | grep -q "ACTIVE"; then
-          #   echo "Updating existing ECS service..."
-          #   aws ecs update-service \
-          #     --cluster "$CLUSTER_NAME" \
-          #     --service "$SERVICE_NAME" \
-          #     --task-definition "$TASK_FAMILY"
-          # else
-          #   echo "Creating new ECS service..."
-          #   aws ecs create-service \
-          #     --cluster "$CLUSTER_NAME" \
-          #     --service-name "$SERVICE_NAME" \
-          #     --task-definition "$TASK_FAMILY" \
-          #     --desired-count "$DESIRED_COUNT" \
-          #     --launch-type FARGATE \
-          #     --network-configuration '{
-          #       "awsvpcConfiguration": {
-          #         "subnets": ['$(echo ${{ vars.AWS_SUBNETS }} | jq -R 'split(",")')],
-          #         "securityGroups": ['$(echo ${{ vars.AWS_SECURITY_GROUPS }} | jq -R 'split(",")')],
-          #         "assignPublicIp": "ENABLED"
-          #       }
-          #     }'
-          # fi
+          echo "⏳ Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "$CLUSTER_NAME" \
+            --services "$SERVICE_NAME"
+          echo "✅ ECS service is stable"

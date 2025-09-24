@@ -55,26 +55,26 @@ jobs:
         uses: actions/checkout@v3
 
       # 2️⃣ Setup language runtime (best practice)
-      - name: Setup .NET SDK
+      - name: Setup .NET SDK for version ${{ inputs.language-version }}
         if: ${{ inputs.language == 'csharp' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.language-version }}
 
-      - name: Setup Java
+      - name: Setup Java for version ${{ inputs.language-version }}
         if: ${{ inputs.language == 'java' }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ inputs.language-version }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js for version ${{ inputs.language-version }}
         if: ${{ inputs.language == 'node' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.language-version }}
 
-      - name: Setup Python
+      - name: Setup Python for version ${{ inputs.language-version }}
         if: ${{ inputs.language == 'python' }}
         uses: actions/setup-python@v5
         with:
