@@ -155,7 +155,7 @@ jobs:
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           PROJECT_PATH="${{ inputs.project-path }}"
-          ARTIFACT_PATH="output"
+          ARTIFACT_PATH="$PROJECT_PATH/output"
           APP_LANGUAGE="${{ inputs.app-language }}"
 
           pwd
