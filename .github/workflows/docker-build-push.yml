@@ -3,8 +3,8 @@ name: Reusable Docker Build & Push
 on:
   workflow_call:
     inputs:
-      language:
-        description: "Application language (csharp, java, node, python)"
+      app-language:
+        description: "Application app-language (csharp, java, node, python)"
         required: true
         type: string
       language-version:
@@ -54,51 +54,52 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup language runtime (best practice)
+      # 2️⃣ Setup app-language runtime (best practice)
       - name: Setup .NET SDK
-        if: ${{ inputs.language == 'csharp' }}
+        if: ${{ inputs.app-language == 'csharp' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.language-version }}
 
       - name: Setup Java
-        if: ${{ inputs.language == 'java' }}
+        if: ${{ inputs.app-language == 'java' }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ inputs.language-version }}
 
       - name: Setup Node.js
-        if: ${{ inputs.language == 'node' }}
+        if: ${{ inputs.app-language == 'node' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.language-version }}
 
       - name: Setup Python
-        if: ${{ inputs.language == 'python' }}
+        if: ${{ inputs.app-language == 'python' }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.language-version }}
 
       # 3️⃣ Build artifacts → standardized output folder
-      - name: Build artifacts for ${{ inputs.language }} version ${{ inputs.language-version }}
+      - name: Build artifacts for ${{ inputs.app-language }} version ${{ inputs.language-version }}
         id: build-artifacts
         run: |
           PROJECT_PATH="${{ inputs.project-path }}"
+          APP_LANGUAGE="${{ inputs.app-language }}"
           ARTIFACT_PATH="$PROJECT_PATH/output"
 
           # Ensure folder is clean
           rm -rf "$ARTIFACT_PATH"
           mkdir -p "$ARTIFACT_PATH"
 
-          echo "Building artifacts for ${{ inputs.language }} from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
+          echo "Building artifacts for $APP_LANGUAGE from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
           ls -la
           pwd
-          if [ "${{ inputs.language }}" == "csharp" ]; then
+          if [ "$APP_LANGUAGE" == "csharp" ]; then
             dotnet restore "$PROJECT_PATH"
             dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
 
-          elif [ "${{ inputs.language }}" == "java" ]; then
+          elif [ "$APP_LANGUAGE" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
               echo "Using Maven Wrapper..."
               "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH"
@@ -109,17 +110,17 @@ jobs:
             ls -la
             cp target/*.jar "$ARTIFACT_PATH/"
 
-          elif [ "${{ inputs.language }}" == "node" ]; then
+          elif [ "$APP_LANGUAGE" == "node" ]; then
             cd "$PROJECT_PATH"
             npm install
             npm run build
             cp -r dist/* "$ARTIFACT_PATH/"
 
-          elif [ "${{ inputs.language }}" == "python" ]; then
+          elif [ "$APP_LANGUAGE" == "python" ]; then
             cp -r "$PROJECT_PATH"/* "$ARTIFACT_PATH/"
 
           else
-            echo "⚠️ Unsupported language: ${{ inputs.language }}"
+            echo "⚠️ Unsupported app-language: $APP_LANGUAGE"
             exit 1
           fi
 
@@ -178,7 +179,7 @@ jobs:
           echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH"
 
           docker build \
-            --build-arg LANGUAGE=${{ inputs.language }} \
+            --build-arg LANGUAGE=${{ inputs.app-language }} \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             --build-arg APP_PATH="$ARTIFACT_PATH" \
             -f "${{ inputs.dockerfile-path }}" \
