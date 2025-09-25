@@ -106,6 +106,8 @@ jobs:
               # Restore and publish dynamically
               dotnet restore "$CSPROJ_FILE"
               dotnet publish "$CSPROJ_FILE" -c Release -o "$ARTIFACT_PATH"
+              echo "Checking the publish files!!!"
+              ls -la $ARTIFACT_PATH/
 
           elif [ "$APP_LANGUAGE" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
@@ -156,21 +158,8 @@ jobs:
           ARTIFACT_PATH="output"
           APP_LANGUAGE="${{ inputs.app-language }}"
 
-          # echo "Build context: $PROJECT_PATH"
-          # echo "Artifacts path inside context: $ARTIFACT_PATH"
-
-          # docker build \
-          #   --build-arg LANGUAGE="${{ inputs.language }}" \
-          #   --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
-          #   --build-arg APP_PATH="$ARTIFACT_PATH" \
-          #   -f "${{ inputs.dockerfile-path }}" \
-          #   -t "$ECR_REGISTRY/$ECR_REPO:latest" \
-          #   -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
-          #   "$PROJECT_PATH"
-
-          # echo "Pushing Docker image to ECR..."
-          # docker push "$ECR_REGISTRY/$ECR_REPO:latest"
-          # docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+          pwd
+          ls -la
 
           # Service and branch info
           SERVICE_NAME=$(basename ${{ github.repository }})
