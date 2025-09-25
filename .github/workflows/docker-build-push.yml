@@ -147,12 +147,13 @@ jobs:
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           PROJECT_PATH="${{ inputs.project-path }}"
           ARTIFACT_PATH="output"
+          APP_LANGUAGE="${{ inputs.app-language }}"
 
           # echo "Build context: $PROJECT_PATH"
           # echo "Artifacts path inside context: $ARTIFACT_PATH"
 
           # docker build \
-          #   --build-arg LANGUAGE=${{ inputs.language }} \
+          #   --build-arg LANGUAGE="${{ inputs.language }}" \
           #   --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
           #   --build-arg APP_PATH="$ARTIFACT_PATH" \
           #   -f "${{ inputs.dockerfile-path }}" \
@@ -179,7 +180,7 @@ jobs:
           echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH"
 
           docker build \
-            --build-arg LANGUAGE=${{ inputs.app-language }} \
+            --build-arg APP_LANGUAGE="$APP_LANGUAGE" \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             --build-arg APP_PATH="$ARTIFACT_PATH" \
             -f "${{ inputs.dockerfile-path }}" \
