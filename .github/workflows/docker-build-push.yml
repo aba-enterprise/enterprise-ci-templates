@@ -95,6 +95,7 @@ jobs:
           echo "Building artifacts for $APP_LANGUAGE from project path: $PROJECT_PATH into output folder: $ARTIFACT_PATH"
           ls -la
           pwd
+          ls -R
           if [ "$APP_LANGUAGE" == "csharp" ]; then
               # Find the first .csproj file in the project path dynamically
               CSPROJ_FILE=$(find "$PROJECT_PATH" -maxdepth 1 -name "*.csproj" | head -n 1)
