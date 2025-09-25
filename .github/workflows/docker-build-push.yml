@@ -160,6 +160,7 @@ jobs:
 
           pwd
           ls -la
+          ls -la $ARTIFACT_PATH/
 
           # Service and branch info
           SERVICE_NAME=$(basename ${{ github.repository }})
