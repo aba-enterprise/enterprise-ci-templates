@@ -107,7 +107,6 @@ jobs:
               echo "Using system Maven..."
               mvn clean package -DskipTests
             fi
-            ls -la
             cp target/*.jar "$ARTIFACT_PATH/"
 
           elif [ "$APP_LANGUAGE" == "node" ]; then
@@ -183,6 +182,7 @@ jobs:
             --build-arg APP_LANGUAGE="$APP_LANGUAGE" \
             --build-arg LANGUAGE_VERSION=${{ inputs.language-version }} \
             --build-arg APP_PATH="$ARTIFACT_PATH" \
+            --build-arg ENVIRONMENT="$ENVIRONMENT" \
             -f "${{ inputs.dockerfile-path }}" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
             -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH" \
