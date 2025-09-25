@@ -155,12 +155,12 @@ jobs:
           ECR_REPO=${{ vars.AWS_ECR_REPO }}
           IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
           PROJECT_PATH="${{ inputs.project-path }}"
-          ARTIFACT_PATH="$PROJECT_PATH/output"
+          ARTIFACT_PATH="output"
           APP_LANGUAGE="${{ inputs.app-language }}"
 
-          pwd
-          ls -la
-          ls -la $ARTIFACT_PATH/
+          echo "Files inside context ($PROJECT_PATH):"
+          ls -la "$PROJECT_PATH"
+          ls -la "$PROJECT_PATH/output"
 
           # Service and branch info
           SERVICE_NAME=$(basename ${{ github.repository }})
