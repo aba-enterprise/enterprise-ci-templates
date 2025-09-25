@@ -105,7 +105,7 @@ jobs:
               echo "✅ Found project file: $CSPROJ_FILE"
               # Restore and publish dynamically
               dotnet restore "$CSPROJ_FILE"
-              dotnet publish "$CSPROJ_FILE" -c Release -o "$ARTIFACT_PATH"
+              dotnet publish "$CSPROJ_FILE" -c Release -o "$ARTIFACT_PATH" --no-self-contained
               echo "Checking the publish files!!!"
               ls -la $ARTIFACT_PATH/
 
