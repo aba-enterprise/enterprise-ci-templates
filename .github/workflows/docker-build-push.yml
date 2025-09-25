@@ -96,8 +96,17 @@ jobs:
           ls -la
           pwd
           if [ "$APP_LANGUAGE" == "csharp" ]; then
-            dotnet restore "./$PROJECT_PATH"
-            dotnet publish "./$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
+              # Find the first .csproj file in the project path dynamically
+              CSPROJ_FILE=$(find "$PROJECT_PATH" -maxdepth 1 -name "*.csproj" | head -n 1)
+              if [ -z "$CSPROJ_FILE" ]; then
+                  echo "❌ No .csproj file found in $PROJECT_PATH"
+                  exit 1
+              fi
+              echo "✅ Found project file: $CSPROJ_FILE"
+              # Restore and publish dynamically
+              dotnet restore "$CSPROJ_FILE"
+              dotnet publish "$CSPROJ_FILE" -c Release -o "$ARTIFACT_PATH"
+          fi
 
           elif [ "$APP_LANGUAGE" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
