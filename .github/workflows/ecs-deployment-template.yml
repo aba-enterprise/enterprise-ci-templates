@@ -39,8 +39,8 @@ on:
         required: true
         type: string
         default: 'dev'
-      language:
-        description: "Application language (csharp, java, node, python)"
+      app-language:
+        description: "Application app-language (csharp, java, node, python)"
         required: true
         type: string
       extra-env:
@@ -80,7 +80,7 @@ jobs:
           IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
 
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
-          LANGUAGE="${{ inputs.language }}"
+          APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
           EXTRA_ENV="${{ inputs.extra-env }}"
           # Default SERVICE_NAME, TASK_FAMILY, CONTAINER_NAME to repo name if user input is empty
@@ -90,12 +90,19 @@ jobs:
 
           # Base env variables from caller
           ENV_VARS=$(jq -n \
-            --arg lang "$LANGUAGE" \
+            --arg lang "$APP_LANGUAGE" \
             --arg env "$ENVIRONMENT" \
-            '[{"name":"LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
+            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
+          
+          echo "User Input Values"
+          echo "Environment Variables - $ENV_VARS"
+          echo "Image Tag - $ECR_IMAGE"
+          echo "Application Language - $APP_LANGUAGE"
+          echo "Environment - $ENVIRONMENT"
+          echo "Extra Environment Variable - $EXTRA_ENV"
 
           # Add language-specific environment variables
-          case "$LANGUAGE" in
+          case "$APP_LANGUAGE" in
             csharp)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
@@ -107,7 +114,9 @@ jobs:
               ]')
               ;;
             java)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}
+              ]')
               ;;
             node)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"}]')
