@@ -96,8 +96,8 @@ jobs:
           ls -la
           pwd
           if [ "$APP_LANGUAGE" == "csharp" ]; then
-            dotnet restore "$PROJECT_PATH"
-            dotnet publish "$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
+            dotnet restore "./$PROJECT_PATH"
+            dotnet publish "./$PROJECT_PATH" -c Release -o "$ARTIFACT_PATH"
 
           elif [ "$APP_LANGUAGE" == "java" ]; then
             if [ -f "$PROJECT_PATH/mvnw" ]; then
