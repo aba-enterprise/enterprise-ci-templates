@@ -216,3 +216,40 @@ jobs:
             --cluster "$CLUSTER_NAME" \
             --services "$SERVICE_NAME"
           echo "✅ ECS service is stable"
+      
+      # 5️⃣ 🧹 Cleanup old ECS task definitions (keep last 5)
+      - name: Cleanup old ECS Task Definitions
+        if: always() # ensures cleanup runs even if earlier steps fail
+        run: |
+          set -euo pipefail
+
+          # Default TASK_FAMILY from input or repo name
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          KEEP_LAST=5
+
+          echo "🔍 Fetching task definitions for family: $TASK_FAMILY"
+
+          REVISIONS=$(aws ecs list-task-definitions \
+              --family-prefix "$TASK_FAMILY" \
+              --sort ASC \
+              --query 'taskDefinitionArns' \
+              --output text)
+
+          TOTAL=$(echo $REVISIONS | wc -w)
+          DELETE_COUNT=$((TOTAL - KEEP_LAST))
+
+          if [ $DELETE_COUNT -le 0 ]; then
+              echo "✅ Nothing to delete. Total revisions: $TOTAL"
+              exit 0
+          fi
+
+          TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
+
+          echo "🗑️ Deleting $DELETE_COUNT old task definition revisions..."
+          for rev in $TO_DELETE; do
+              echo "Deleting $rev"
+              aws ecs deregister-task-definition --task-definition "$rev"
+          done
+
+          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions."
