@@ -246,20 +246,24 @@ jobs:
           fi
 
           # Find task definitions in use by any active services in the cluster, but only for this task family
-          ACTIVE_IN_USE=""
-          for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
-              td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
-                  --query 'services[].taskDefinition' --output text)
-              # Only keep task definitions that match our family
-              if [[ "$td" == *"$TASK_FAMILY"* ]]; then
-                  ACTIVE_IN_USE="$ACTIVE_IN_USE
-          $td"
-              fi
-          done
-          ACTIVE_IN_USE=$(echo "$ACTIVE_IN_USE" | sort -u)
+          ACTIVE_IN_USE=()
+            for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
+                td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
+                    --query 'services[].taskDefinition' --output text)
+                
+                # Only keep task definitions that match our family
+                if [[ "$td" == *"$TASK_FAMILY"* ]]; then
+                    ACTIVE_IN_USE+=("$td")
+                fi
+            done
 
-          echo "🔎 Active task definitions in use by $TASK_FAMILY services:"
-          echo "$ACTIVE_IN_USE" | sed 's/^/   - /'
+            # Remove duplicates and sort
+            ACTIVE_IN_USE=($(printf "%s\n" "${ACTIVE_IN_USE[@]}" | sort -u))
+
+            echo "🔎 Active task definitions in use by $TASK_FAMILY services:"
+            for td in "${ACTIVE_IN_USE[@]}"; do
+                echo "   - $td"
+            done
 
           # Revisions to attempt deletion
           TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
