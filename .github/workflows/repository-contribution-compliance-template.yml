@@ -80,8 +80,11 @@ jobs:
         run: |
           echo "🔍 Checking repository for unwanted files..."
 
-          # Compare changes against the base branch (provided as input)
-          UNWANTED_FILES=$(git diff --name-only origin/${{ github.inputs.base_branch }}...HEAD | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)')
+          # Make sure the base branch exists locally
+          git fetch origin ${{ github.inputs.base_branch }}
+
+          # Compare changes against the base branch
+          UNWANTED_FILES=$(git diff --name-only origin/${{ github.inputs.base_branch }}..HEAD | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)' || true)
 
           if [ -n "$UNWANTED_FILES" ]; then
             echo "❌ Found unwanted files:"
