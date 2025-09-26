@@ -245,12 +245,20 @@ jobs:
               exit 0
           fi
 
-          # Get active task definitions used by any service in the cluster
-          ACTIVE_IN_USE=$(for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
-              aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" --query 'services[].taskDefinition' --output text
-          done | sort -u)
+          # Find task definitions in use by any active services in the cluster, but only for this task family
+          ACTIVE_IN_USE=""
+          for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
+              td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
+                  --query 'services[].taskDefinition' --output text)
+              # Only keep task definitions that match our family
+              if [[ "$td" == *"$TASK_FAMILY"* ]]; then
+                  ACTIVE_IN_USE="$ACTIVE_IN_USE
+          $td"
+              fi
+          done
+          ACTIVE_IN_USE=$(echo "$ACTIVE_IN_USE" | sort -u)
 
-          echo "🔎 Active task definitions in use by services:"
+          echo "🔎 Active task definitions in use by $TASK_FAMILY services:"
           echo "$ACTIVE_IN_USE" | sed 's/^/   - /'
 
           # Revisions to attempt deletion
