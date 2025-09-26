@@ -217,15 +217,16 @@ jobs:
             --services "$SERVICE_NAME"
           echo "✅ ECS service is stable"
       
-      # 5️⃣ 🧹 Cleanup old ECS task definitions (keep last 5)
+      # 5️⃣ 🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
       - name: Cleanup old ECS Task Definitions
-        if: always() # ensures cleanup runs even if earlier steps fail
+        if: always()
         run: |
           set -euo pipefail
 
           # Default TASK_FAMILY from input or repo name
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           KEEP_LAST=5
 
           echo "🔍 Fetching task definitions for family: $TASK_FAMILY"
@@ -246,10 +247,21 @@ jobs:
 
           TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
 
-          echo "🗑️ Deleting $DELETE_COUNT old task definition revisions..."
+          echo "🗑️ Checking and deleting $DELETE_COUNT old task definition revisions..."
           for rev in $TO_DELETE; do
-              echo "Deleting $rev"
-              aws ecs deregister-task-definition --task-definition "$rev"
+              # Check if any service is using this task definition
+              IN_USE=$(aws ecs describe-services \
+                --cluster "$CLUSTER_NAME" \
+                --services "$SERVICE_NAME" \
+                --query "services[].taskDefinition" \
+                --output text | grep -Fx "$rev" || true)
+
+              if [ -n "$IN_USE" ]; then
+                  echo "⏭️ Skipping $rev (still in use by service $SERVICE_NAME)"
+              else
+                  echo "Deleting $rev"
+                  aws ecs deregister-task-definition --task-definition "$rev"
+              fi
           done
 
-          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions."
+          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones."
