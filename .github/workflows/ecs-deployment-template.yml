@@ -223,14 +223,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Default TASK_FAMILY from input or repo name
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           KEEP_LAST=5
 
-          echo "🔍 Fetching task definitions for family: $TASK_FAMILY"
+          echo "🔍 Fetching task definitions for family: $TASK_FAMILY..."
 
+          # Get all revisions sorted from oldest to newest
           REVISIONS=$(aws ecs list-task-definitions \
               --family-prefix "$TASK_FAMILY" \
               --sort ASC \
@@ -245,23 +245,35 @@ jobs:
               exit 0
           fi
 
+          # Find task definitions in use by any active services in the cluster
+          ACTIVE_IN_USE=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
+              --query 'serviceArns' --output text \
+              | xargs -n1 -I {} aws ecs describe-services --cluster "$CLUSTER_NAME" --services {} \
+              --query 'services[].taskDefinition' --output text | sort -u)
+
+          echo "🔎 Active task definitions in use by services:"
+          echo "$ACTIVE_IN_USE" | sed 's/^/   - /'
+
+          # Revisions to attempt deletion
           TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
+          KEPT=()
 
-          echo "🗑️ Checking and deleting $DELETE_COUNT old task definition revisions..."
+          echo "🗑️ Checking and deleting old task definition revisions..."
           for rev in $TO_DELETE; do
-              # Check if any service is using this task definition
-              IN_USE=$(aws ecs describe-services \
-                --cluster "$CLUSTER_NAME" \
-                --services "$SERVICE_NAME" \
-                --query "services[].taskDefinition" \
-                --output text | grep -Fx "$rev" || true)
-
-              if [ -n "$IN_USE" ]; then
-                  echo "⏭️ Skipping $rev (still in use by service $SERVICE_NAME)"
+              if echo "$ACTIVE_IN_USE" | grep -qx "$rev"; then
+                  echo "⏭️ Skipping $rev (still in use by one or more services)"
+                  KEPT+=("$rev")
               else
                   echo "Deleting $rev"
                   aws ecs deregister-task-definition --task-definition "$rev"
               fi
           done
 
-          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones."
+          # Add the remaining last $KEEP_LAST revisions to KEPT
+          REMAINING=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=c+1;i<=NF;i++) print $i}')
+          for r in $REMAINING; do KEPT+=("$r"); done
+
+          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones:"
+          for r in "${KEPT[@]}"; do
+              echo "   - $r"
+          done
