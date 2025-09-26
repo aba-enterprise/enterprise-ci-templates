@@ -1,39 +1,31 @@
-name: SonarQube Analysis (Reusable)
+name: SonarQube Analysis (Reusable Multi-Language)
 
 on:
   workflow_call:
     inputs:
-      language:
-        description: "Programming language (csharp, java, javascript, python, go, cpp)"
-        required: true
-        type: string
-      languageVersion:
-        description: "Version of the language/runtime to use"
-        required: false
-        type: string
-        default: ""  # If empty, use default version
       projectKey:
-        description: "SonarQube project key"
         required: true
         type: string
       organizationKey:
-        description: "SonarQube organization key"
         required: true
         type: string
-      projectPath:
-        description: "Path to project/solution (optional, for multi-module projects)"
+      language:
+        description: "Programming language (dotnet/java/node/python)"
+        required: true
+        type: string
+      version:
+        description: "Language/runtime version"
+        required: true
+        type: string
+      projectSlnPath:
         required: false
         type: string
       testProjectPath:
-        description: "Path to test project/folder (optional)"
-        required: false
-        type: string
-      buildCommand:
-        description: "Optional build command if needed"
         required: false
         type: string
       run-sonarqube-gate-check:
         description: "Run SonarQube Quality Gate check? (yes/no)"
+        type: string
         required: false
         default: "yes"
     secrets:
@@ -45,115 +37,125 @@ on:
 jobs:
   sonarqube:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      # 2️⃣ Setup environment based on language + version
-      - name: Setup .NET SDK
-        if: ${{ inputs.language == 'csharp' }}
+      # Setup runtime based on language
+      - name: Setup Runtime
+        if: ${{ inputs.language == 'dotnet' }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '8.0.x' }}
+          dotnet-version: ${{ inputs.version }}
 
-      - name: Setup Java
+      - name: Setup Runtime
         if: ${{ inputs.language == 'java' }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
+          java-version: ${{ inputs.version }}
           distribution: 'temurin'
-          java-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '17' }}
 
-      - name: Setup Node.js
-        if: ${{ inputs.language == 'javascript' || inputs.language == 'typescript' }}
+      - name: Setup Runtime
+        if: ${{ inputs.language == 'node' }}
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '20' }}
+          node-version: ${{ inputs.version }}
 
-      - name: Setup Python
+      - name: Setup Runtime
         if: ${{ inputs.language == 'python' }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '3.11' }}
+          python-version: ${{ inputs.version }}
 
-      - name: Setup Go
-        if: ${{ inputs.language == 'go' }}
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ inputs.languageVersion != '' && inputs.languageVersion || '1.21' }}
-
-      # 3️⃣ Restore / install dependencies
-      - name: Restore .NET dependencies
-        if: ${{ inputs.language == 'csharp' && inputs.projectPath != '' }}
-        run: dotnet restore ${{ inputs.projectPath }}
-
-      - name: Install Node dependencies
-        if: ${{ inputs.language == 'javascript' || inputs.language == 'typescript' }}
-        run: npm install
-
-      - name: Install Python dependencies
-        if: ${{ inputs.language == 'python' && inputs.projectPath != '' }}
-        run: pip install -r ${{ inputs.projectPath }}/requirements.txt
-
-      # 4️⃣ Build project if needed
-      - name: Build project
-        if: ${{ inputs.buildCommand != '' }}
-        run: ${{ inputs.buildCommand }}
-
-      # 5️⃣ Run tests (optional)
-      - name: Run tests (.NET)
-        if: ${{ inputs.language == 'csharp' && inputs.testProjectPath != '' }}
+      # Install SonarScanner & tools
+      - name: Install SonarScanner & Tools
         run: |
-          mkdir -p ./coverage
-          dotnet test ${{ inputs.testProjectPath }} \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./coverage \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+          if [[ "${{ inputs.language }}" == "dotnet" ]]; then
+            dotnet tool install --global dotnet-sonarscanner
+            dotnet tool install --global dotnet-reportgenerator-globaltool
+            echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+          elif [[ "${{ inputs.language }}" == "java" ]]; then
+            curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.9.3.6977-linux.zip
+            unzip -qq sonar-scanner-cli.zip -d $HOME/sonar-scanner
+            echo "$HOME/sonar-scanner/sonar-scanner-4.9.3.6977-linux/bin" >> $GITHUB_PATH
+          else
+            npm install -g sonar-scanner || pip install sonar-scanner
+          fi
 
-      - name: Run tests (Java)
-        if: ${{ inputs.language == 'java' && inputs.testProjectPath != '' }}
-        run: ./mvnw test -f ${{ inputs.testProjectPath }}
-
-      - name: Run tests (Node)
-        if: ${{ (inputs.language == 'javascript' || inputs.language == 'typescript') && inputs.testProjectPath != '' }}
-        run: npm test --prefix ${{ inputs.testProjectPath }}
-
-      - name: Run tests (Python)
-        if: ${{ inputs.language == 'python' && inputs.testProjectPath != '' }}
-        run: pytest ${{ inputs.testProjectPath }} --junitxml=results.xml
-
-      # 6️⃣ Run SonarScanner
-      - name: Run SonarScanner
+      # Begin SonarScanner
+      - name: Begin SonarScanner
         run: |
-          sonar-scanner \
-            -Dsonar.projectKey=${{ inputs.projectKey }} \
-            -Dsonar.organization=${{ inputs.organizationKey }} \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
-            $([[ "${{ inputs.language }}" == "csharp" ]] && echo "-Dsonar.cs.opencover.reportsPaths=./coverage/**/coverage.opencover.xml") \
-            $([[ "${{ inputs.language }}" == "csharp" ]] && echo "-Dsonar.test.exclusions=**/bin/**,**/obj/**")
+          SONAR_PARAMS="-Dsonar.projectKey=${{ inputs.projectKey }} -Dsonar.organization=${{ inputs.organizationKey }} -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}"
+          
+          # Auto-detect coverage files
+          if [[ "${{ inputs.language }}" == "dotnet" ]]; then
+            COVERAGE_PATH="./coverage/**/coverage.opencover.xml"
+            dotnet sonarscanner begin /k:"${{ inputs.projectKey }}" /o:"${{ inputs.organizationKey }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="$COVERAGE_PATH"
+          elif [[ "${{ inputs.language }}" == "java" ]]; then
+            if [ -f "pom.xml" ]; then
+              COVERAGE_PATH="./target/site/jacoco/jacoco.xml"
+            elif [ -f "build.gradle" ]; then
+              COVERAGE_PATH="./build/reports/jacoco/test/jacocoTestReport.xml"
+            fi
+            sonar-scanner $SONAR_PARAMS -Dsonar.java.coveragePlugin=jacoco -Dsonar.coverage.jacoco.xmlReportPaths="$COVERAGE_PATH"
+          elif [[ "${{ inputs.language }}" == "node" ]]; then
+            COVERAGE_PATH="./coverage/lcov.info"
+            sonar-scanner $SONAR_PARAMS -Dsonar.javascript.lcov.reportPaths="$COVERAGE_PATH"
+          elif [[ "${{ inputs.language }}" == "python" ]]; then
+            COVERAGE_PATH="./coverage.xml"
+            sonar-scanner $SONAR_PARAMS -Dsonar.python.coverage.reportPaths="$COVERAGE_PATH"
+          fi
 
-      # 7️⃣ Optional: Quality Gate Check
+      # Build & Run Tests
+      - name: Build & Test with Coverage
+        run: |
+          if [[ "${{ inputs.language }}" == "dotnet" && inputs.projectSlnPath && inputs.testProjectPath ]]; then
+            mkdir -p ./coverage
+            dotnet build ./${{ inputs.projectSlnPath }} --configuration Release
+            dotnet test ./${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" --results-directory ./coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+          elif [[ "${{ inputs.language }}" == "java" ]]; then
+            if [ -f "pom.xml" ]; then
+              mvn clean test jacoco:report
+            elif [ -f "build.gradle" ]; then
+              ./gradlew test jacocoTestReport
+            fi
+          elif [[ "${{ inputs.language }}" == "node" ]]; then
+            npm install
+            npx jest --coverage
+          elif [[ "${{ inputs.language }}" == "python" ]]; then
+            pip install -r requirements.txt
+            pytest --cov=./ --cov-report=xml
+
+      # End SonarScanner (dotnet only)
+      - name: End SonarScanner
+        run: |
+          if [[ "${{ inputs.language }}" == "dotnet" ]]; then
+            dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          fi
+
+      # Optional: Coverage Summary (dotnet only)
+      - name: Generate Coverage Summary
+        if: ${{ inputs.language == 'dotnet' }}
+        run: |
+          COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
+          if [ -f "$COVERAGE_FILE" ]; then
+            reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
+            echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Check SonarQube Quality Gate
       - name: Check SonarQube Quality Gate
         run: |
-          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
-            "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
-            | jq -r '.projectStatus.status')
-
+          STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" | jq -r '.projectStatus.status')
           echo "Quality Gate status: $STATUS"
-          INPUT_RUN_ALERT_CHECK=${{ inputs.run-sonarqube-gate-check }}
-          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]]; then
+          if [[ "${{ inputs.run-sonarqube-gate-check }}" == "yes" ]]; then
               if [ "$STATUS" = "OK" ]; then
                 echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
               else
                 echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
-                # exit 1  # Uncomment to fail the pipeline on gate failure
+                # exit 1
               fi
           else
-            echo "⚠️ Gate check bypassed as per configuration (run-sonarqube-gate-check=no) and current Quality Gate status is: $STATUS." >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ Gate check bypassed (run-sonarqube-gate-check=no), status: $STATUS" >> $GITHUB_STEP_SUMMARY
           fi
