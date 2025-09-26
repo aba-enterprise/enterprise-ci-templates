@@ -1,0 +1,88 @@
+name: "Repository Contribution Compliance (Reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      base_branch:
+        description: "Base branch for comparison"
+        required: true
+        type: string
+      jira_prefix:
+        description: "Jira project key prefix (e.g., SCRUM, PROJ)"
+        required: false
+        type: string
+        default: "[A-Z]+"
+
+jobs:
+  commit-lint:
+    runs-on: ubuntu-latest
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # 2️⃣ Validate commit messages for Jira keys
+      - name: Validate commit messages for Jira keys
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        run: |
+          echo "🔍 Checking commits against Jira ticket pattern..."
+          
+          # Determine commit range
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          fi
+
+          # Get commit messages
+          commits=$(git log $range --pretty=format:"%s")
+          missing=0
+
+          echo "📋 Commits in range $range:"
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
+              echo "✅ $msg"
+            else
+              echo "❌ $msg (missing Jira key)"
+              missing=1
+            fi
+          done <<< "$commits"
+
+          if [ "$missing" -eq 1 ]; then
+            echo "❌ One or more commits do not include a Jira ticket. Please fix commit messages."
+            exit 1
+          else
+            echo "✅ All commits include Jira ticket numbers."
+          fi
+
+      # 3️⃣ Check PR title for Jira key (only for PRs)
+      - name: Check PR title for Jira key
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "🔍 Checking PR title for Jira key..."
+          pr_title="${{ github.event.pull_request.title }}"
+          echo "PR title = $pr_title"
+          if ! echo "$pr_title" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
+            echo "❌ PR title missing Jira key: $pr_title"
+            exit 1
+          fi
+          echo "✅ PR title contains Jira key: $pr_title"
+
+      # 4️⃣ Validate repository for unwanted files
+      - name: Validate repository for unwanted files
+        run: |
+          echo "🔍 Checking repository for unwanted files..."
+          # Add your unwanted file patterns here
+          UNWANTED_FILES=$(git diff --name-only ${{ github.event.inputs.base_branch }} | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)')
+          if [ -n "$UNWANTED_FILES" ]; then
+            echo "❌ Found unwanted files:"
+            echo "$UNWANTED_FILES"
+            exit 1
+          fi
+          echo "✅ No unwanted files found."
+
+      # 5️⃣ Success
+      - name: Success
+        run: echo "✅ All commits, PR title, and repository checks passed!"
