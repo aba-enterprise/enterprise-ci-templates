@@ -1,10 +1,17 @@
 name: "Repository Contribution Compliance (Reusable)"
 
+# File: .github/workflows/repository-contribution-compliance-template.yml
+# Description: Reusable workflow to enforce repository contribution compliance.
+#   Checks: 
+#     1. Commit messages for Jira ticket keys
+#     2. PR title for Jira ticket key
+#     3. Detect unwanted files (like .DS_Store, .env, .log, node_modules, __pycache__)
+
 on:
   workflow_call:
     inputs:
       base_branch:
-        description: "Base branch for comparison"
+        description: "Base branch for comparison (e.g., main)"
         required: true
         type: string
       jira_prefix:
@@ -14,7 +21,7 @@ on:
         default: "[A-Z]+"
 
 jobs:
-  commit-lint:
+  compliance-check:
     runs-on: ubuntu-latest
     steps:
       # 1️⃣ Checkout repository
@@ -36,7 +43,6 @@ jobs:
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
 
-          # Get commit messages
           commits=$(git log $range --pretty=format:"%s")
           missing=0
 
@@ -53,11 +59,10 @@ jobs:
           if [ "$missing" -eq 1 ]; then
             echo "❌ One or more commits do not include a Jira ticket. Please fix commit messages."
             exit 1
-          else
-            echo "✅ All commits include Jira ticket numbers."
           fi
+          echo "✅ All commits include Jira ticket numbers."
 
-      # 3️⃣ Check PR title for Jira key (only for PRs)
+      # 3️⃣ Check PR title for Jira key (PR only)
       - name: Check PR title for Jira key
         if: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -70,12 +75,11 @@ jobs:
           fi
           echo "✅ PR title contains Jira key: $pr_title"
 
-      # 4️⃣ Validate repository for unwanted files
+      # 4️⃣ Check for unwanted files
       - name: Validate repository for unwanted files
         run: |
           echo "🔍 Checking repository for unwanted files..."
-          # Add your unwanted file patterns here
-          UNWANTED_FILES=$(git diff --name-only ${{ github.event.inputs.base_branch }} | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)')
+          UNWANTED_FILES=$(git diff --name-only origin/${{ github.inputs.base_branch }}...HEAD | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)')
           if [ -n "$UNWANTED_FILES" ]; then
             echo "❌ Found unwanted files:"
             echo "$UNWANTED_FILES"
@@ -84,5 +88,5 @@ jobs:
           echo "✅ No unwanted files found."
 
       # 5️⃣ Success
-      - name: Success
-        run: echo "✅ All commits, PR title, and repository checks passed!"
+      - name: Compliance Passed
+        run: echo "✅ Repository contribution compliance checks passed!"
