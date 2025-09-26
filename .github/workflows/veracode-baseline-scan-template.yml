@@ -33,8 +33,8 @@ jobs:
         run: |
           echo "🔎 Checking Veracode alerts for branch ${GITHUB_REF}..."
 
-          CRITICAL=4
-          HIGH=4
+          CRITICAL=0
+          HIGH=0
           MEDIUM=10
           LOW=20
           INFORMATIONAL=40
