@@ -223,12 +223,17 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Color codes
+          YELLOW='\033[1;33m'
+          GREEN='\033[1;32m'
+          NC='\033[0m' # No Color
+
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           KEEP_LAST=5
 
-          echo "🔍 Fetching task definitions for family: $TASK_FAMILY..."
+          echo -e "🔍 Fetching task definitions for family: ${YELLOW}$TASK_FAMILY${NC}..."
 
           # Get all revisions sorted from oldest to newest
           REVISIONS=$(aws ecs list-task-definitions \
@@ -241,29 +246,25 @@ jobs:
           DELETE_COUNT=$((TOTAL - KEEP_LAST))
 
           if [ $DELETE_COUNT -le 0 ]; then
-              echo "✅ Nothing to delete. Total revisions: $TOTAL"
+              echo -e "✅ Nothing to delete. Total revisions: ${GREEN}$TOTAL${NC}"
               exit 0
           fi
 
           # Find task definitions in use by any active services in the cluster, but only for this task family
           ACTIVE_IN_USE=()
-            for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
-                td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
-                    --query 'services[].taskDefinition' --output text)
-                
-                # Only keep task definitions that match our family
-                if [[ "$td" == *"$TASK_FAMILY"* ]]; then
-                    ACTIVE_IN_USE+=("$td")
-                fi
-            done
+          for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
+              td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
+                  --query 'services[].taskDefinition' --output text)
 
-            # Remove duplicates and sort
-            ACTIVE_IN_USE=($(printf "%s\n" "${ACTIVE_IN_USE[@]}" | sort -u))
+              # Only keep task definitions that match our family
+              if [[ "$td" == *"$TASK_FAMILY"* ]]; then
+                  ACTIVE_IN_USE+=("$td")
+                  echo -e "🔎 Active task definition ${YELLOW}$TASK_FAMILY${NC} in use by service ${GREEN}$svc${NC}"
+              fi
+          done
 
-            echo "🔎 Active task definitions in use by $TASK_FAMILY services:"
-            for td in "${ACTIVE_IN_USE[@]}"; do
-                echo "   - $td"
-            done
+          # Remove duplicates and sort
+          ACTIVE_IN_USE=($(printf "%s\n" "${ACTIVE_IN_USE[@]}" | sort -u))
 
           # Revisions to attempt deletion
           TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
@@ -271,11 +272,11 @@ jobs:
 
           echo "🗑️ Checking and deleting old task definition revisions..."
           for rev in $TO_DELETE; do
-              if echo "$ACTIVE_IN_USE" | grep -qx "$rev"; then
-                  echo "⏭️ Skipping $rev (still in use by one or more services)"
+              if printf '%s\n' "${ACTIVE_IN_USE[@]}" | grep -qx "$rev"; then
+                  echo -e "⏭️ Skipping ${YELLOW}$rev${NC} (still in use by one or more services)"
                   KEPT+=("$rev")
               else
-                  echo "🗑️ Deleting $rev"
+                  echo -e "🗑️ Deleting ${YELLOW}$rev${NC}"
                   aws ecs deregister-task-definition --task-definition "$rev" \
                       --query 'taskDefinition.taskDefinitionArn' --output text >/dev/null
               fi
@@ -285,7 +286,7 @@ jobs:
           REMAINING=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=c+1;i<=NF;i++) print $i}')
           for r in $REMAINING; do KEPT+=("$r"); done
 
-          echo "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones:"
+          echo -e "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones:"
           for r in "${KEPT[@]}"; do
-              echo "   - $r"
+              echo -e "   - ${YELLOW}$r${NC}"
           done
