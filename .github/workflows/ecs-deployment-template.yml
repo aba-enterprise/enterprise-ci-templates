@@ -246,13 +246,15 @@ jobs:
           fi
 
           # Find task definitions in use by any active services in the cluster
-          ACTIVE_IN_USE=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
-              --query 'serviceArns' --output text \
-              | xargs -n1 -I {} aws ecs describe-services --cluster "$CLUSTER_NAME" --services {} \
-              --query 'services[].taskDefinition' --output text | sort -u)
-
+          ACTIVE_IN_USE=""
+          for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
+              td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
+                  --query 'services[].taskDefinition' --output text)
+              ACTIVE_IN_USE="$ACTIVE_IN_USE
+          $td"
+          done
           echo "🔎 Active task definitions in use by services:"
-          echo "$ACTIVE_IN_USE" | sed 's/^/   - /'
+          ACTIVE_IN_USE=$(echo "$ACTIVE_IN_USE" | sort -u)
 
           # Revisions to attempt deletion
           TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
