@@ -13,7 +13,7 @@ on:
         description: "Programming language (dotnet/java/node/python)"
         required: true
         type: string
-      version:
+      language-version:
         description: "Language/runtime version"
         required: true
         type: string
@@ -46,26 +46,26 @@ jobs:
         if: ${{ inputs.language == 'dotnet' }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ inputs.version }}
+          dotnet-version: ${{ inputs.language-version }}
 
       - name: Setup Runtime
         if: ${{ inputs.language == 'java' }}
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ inputs.version }}
+          java-version: ${{ inputs.language-version }}
           distribution: 'temurin'
 
       - name: Setup Runtime
         if: ${{ inputs.language == 'node' }}
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ inputs.version }}
+          node-version: ${{ inputs.language-version }}
 
       - name: Setup Runtime
         if: ${{ inputs.language == 'python' }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ inputs.version }}
+          python-version: ${{ inputs.language-version }}
 
       # Install SonarScanner & tools
       - name: Install SonarScanner & Tools
