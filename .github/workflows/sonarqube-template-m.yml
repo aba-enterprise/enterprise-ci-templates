@@ -91,17 +91,17 @@ jobs:
             dotnet sonarscanner begin /k:"${{ inputs.projectKey }}" /o:"${{ inputs.organizationKey }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="$COVERAGE_PATH"
           elif [[ "${{ inputs.language }}" == "java" ]]; then
             if [ -f "pom.xml" ]; then
-              COVERAGE_PATH="./target/site/jacoco/jacoco.xml"
+               mvn clean verify jacoco:report
             elif [ -f "build.gradle" ]; then
               COVERAGE_PATH="./build/reports/jacoco/test/jacocoTestReport.xml"
             fi
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey="${{ inputs.projectKey }}" \
-            -Dsonar.organization="${{ inputs.organizationKey }}" \
-            -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            -Dsonar.token="${{ secrets.SONAR_TOKEN }}" \
-            -Dsonar.coverage.jacoco.xmlReportPaths="target/site/jacoco/jacoco.xml" \
-            -Dsonar.exclusions="**/target/**,**/*.md,**/*.yml,**/Dockerfile"
+              -Dsonar.projectKey="${{ inputs.projectKey }}" \
+              -Dsonar.organization="${{ inputs.organizationKey }}" \
+              -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+              -Dsonar.token="${{ secrets.SONAR_TOKEN }}" \
+              -Dsonar.coverage.jacoco.xmlReportPaths="target/site/jacoco/jacoco.xml" \
+              -Dsonar.java.binaries="target/classes"
           elif [[ "${{ inputs.language }}" == "node" ]]; then
             COVERAGE_PATH="./coverage/lcov.info"
             sonar-scanner $SONAR_PARAMS -Dsonar.javascript.lcov.reportPaths="$COVERAGE_PATH"
