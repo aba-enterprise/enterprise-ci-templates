@@ -91,7 +91,7 @@ jobs:
             dotnet sonarscanner begin /k:"${{ inputs.projectKey }}" /o:"${{ inputs.organizationKey }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="$COVERAGE_PATH"
           elif [[ "${{ inputs.language }}" == "java" ]]; then
             if [ -f "pom.xml" ]; then
-               echo "Checking the report"
+               mvn clean verify jacoco:report
             elif [ -f "build.gradle" ]; then
               COVERAGE_PATH="./build/reports/jacoco/test/jacocoTestReport.xml"
             fi
@@ -119,7 +119,7 @@ jobs:
             dotnet test ./${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" --results-directory ./coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
           elif [[ "${{ inputs.language }}" == "java" ]]; then
             if [ -f "pom.xml" ]; then
-              mvn clean verify jacoco:report
+              mvn test verify jacoco:report
             elif [ -f "build.gradle" ]; then
               ./gradlew test jacocoTestReport
             fi
