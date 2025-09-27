@@ -42,26 +42,26 @@ jobs:
         uses: actions/checkout@v3
 
       # Setup runtime based on language
-      - name: Setup Runtime
+      - name: Setup Runtime (.NET)
         if: ${{ inputs.language == 'dotnet' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.language-version }}
 
-      - name: Setup Runtime
+      - name: Setup Runtime (Java)
         if: ${{ inputs.language == 'java' }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ inputs.language-version }}
           distribution: 'temurin'
 
-      - name: Setup Runtime
+      - name: Setup Runtime (Node)
         if: ${{ inputs.language == 'node' }}
         uses: actions/setup-node@v3
         with:
           node-version: ${{ inputs.language-version }}
 
-      - name: Setup Runtime
+      - name: Setup Runtime (Python)
         if: ${{ inputs.language == 'python' }}
         uses: actions/setup-python@v4
         with:
@@ -75,26 +75,50 @@ jobs:
             dotnet tool install --global dotnet-reportgenerator-globaltool
             echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           elif [[ "${{ inputs.language }}" == "java" ]]; then
-            echo "Install SonarScanner & tools for Java"
-          else
-            npm install -g sonar-scanner || pip install sonar-scanner
+            echo "Using Maven/Gradle Sonar Plugin (already bundled)"
+          elif [[ "${{ inputs.language }}" == "node" ]]; then
+            npm install -g sonar-scanner
+          elif [[ "${{ inputs.language }}" == "python" ]]; then
+            pip install sonar-scanner
           fi
 
-      # Begin SonarScanner
-      - name: Begin SonarScanner
+      # Build & Run Tests (language-specific)
+      - name: Build & Test with Coverage
+        run: |
+          if [[ "${{ inputs.language }}" == "dotnet" && inputs.projectSlnPath && inputs.testProjectPath ]]; then
+            mkdir -p ./coverage
+            dotnet build ./${{ inputs.projectSlnPath }} --configuration Release
+            dotnet test ./${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" --results-directory ./coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+          # clean verify  compiles, tests, packages, and runs all Maven lifecycle steps. 
+          # jacoco:report generates the coverage XML/HTML report
+          elif [[ "${{ inputs.language }}" == "java" ]]; then
+            if [ -f "pom.xml" ]; then
+              mvn clean verify jacoco:report
+            elif [ -f "build.gradle" ]; then
+              ./gradlew clean test jacocoTestReport
+            fi
+
+          elif [[ "${{ inputs.language }}" == "node" ]]; then
+            npm install
+            npx jest --coverage
+
+          elif [[ "${{ inputs.language }}" == "python" ]]; then
+            pip install -r requirements.txt
+            pytest --cov=./ --cov-report=xml
+          fi
+
+      # Run SonarScanner
+      - name: Run SonarQube Scanner
         run: |
           SONAR_PARAMS="-Dsonar.projectKey=${{ inputs.projectKey }} -Dsonar.organization=${{ inputs.organizationKey }} -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}"
-          
-          # Auto-detect coverage files
+
           if [[ "${{ inputs.language }}" == "dotnet" ]]; then
             COVERAGE_PATH="./coverage/**/coverage.opencover.xml"
             dotnet sonarscanner begin /k:"${{ inputs.projectKey }}" /o:"${{ inputs.organizationKey }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="$COVERAGE_PATH"
+            dotnet build
+            dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
           elif [[ "${{ inputs.language }}" == "java" ]]; then
-            if [ -f "pom.xml" ]; then
-               mvn clean verify jacoco:report
-            elif [ -f "build.gradle" ]; then
-              COVERAGE_PATH="./build/reports/jacoco/test/jacocoTestReport.xml"
-            fi
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
               -Dsonar.projectKey="${{ inputs.projectKey }}" \
               -Dsonar.organization="${{ inputs.organizationKey }}" \
@@ -102,54 +126,41 @@ jobs:
               -Dsonar.token="${{ secrets.SONAR_TOKEN }}" \
               -Dsonar.coverage.jacoco.xmlReportPaths="target/site/jacoco/jacoco.xml" \
               -Dsonar.java.binaries="target/classes"
+
           elif [[ "${{ inputs.language }}" == "node" ]]; then
             COVERAGE_PATH="./coverage/lcov.info"
             sonar-scanner $SONAR_PARAMS -Dsonar.javascript.lcov.reportPaths="$COVERAGE_PATH"
+
           elif [[ "${{ inputs.language }}" == "python" ]]; then
             COVERAGE_PATH="./coverage.xml"
             sonar-scanner $SONAR_PARAMS -Dsonar.python.coverage.reportPaths="$COVERAGE_PATH"
           fi
 
-      # Build & Run Tests
-      - name: Build & Test with Coverage
-        run: |
-          if [[ "${{ inputs.language }}" == "dotnet" && inputs.projectSlnPath && inputs.testProjectPath ]]; then
-            mkdir -p ./coverage
-            dotnet build ./${{ inputs.projectSlnPath }} --configuration Release
-            dotnet test ./${{ inputs.testProjectPath }} --collect:"XPlat Code Coverage" --results-directory ./coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
-          elif [[ "${{ inputs.language }}" == "java" ]]; then
-            if [ -f "pom.xml" ]; then
-              mvn test verify jacoco:report
-            elif [ -f "build.gradle" ]; then
-              ./gradlew test jacocoTestReport
-            fi
-          elif [[ "${{ inputs.language }}" == "node" ]]; then
-            npm install
-            npx jest --coverage
-          elif [[ "${{ inputs.language }}" == "python" ]]; then
-            pip install -r requirements.txt
-            pytest --cov=./ --cov-report=xml
-          fi
-
-      # End SonarScanner (dotnet only)
-      - name: End SonarScanner
+      # Optional: Coverage Summary (multi-language)
+      - name: Generate Coverage Summary
         run: |
           if [[ "${{ inputs.language }}" == "dotnet" ]]; then
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+            COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
+            if [ -f "$COVERAGE_FILE" ]; then
+              reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
+              echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+              cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
+            fi
+
+          elif [[ "${{ inputs.language }}" == "java" && -f "target/site/jacoco/jacoco.xml" ]]; then
+            echo "## 🔎 Code Coverage Summary (Java)" >> $GITHUB_STEP_SUMMARY
+            grep -A 10 "<counter type=\"INSTRUCTION\"" target/site/jacoco/jacoco.xml || true
+
+          elif [[ "${{ inputs.language }}" == "node" && -f "coverage/lcov.info" ]]; then
+            echo "## 🔎 Code Coverage Summary (Node)" >> $GITHUB_STEP_SUMMARY
+            npx istanbul report text-summary | tee -a $GITHUB_STEP_SUMMARY
+
+          elif [[ "${{ inputs.language }}" == "python" && -f "coverage.xml" ]]; then
+            echo "## 🔎 Code Coverage Summary (Python)" >> $GITHUB_STEP_SUMMARY
+            coverage report | tee -a $GITHUB_STEP_SUMMARY
           fi
 
-      # Optional: Coverage Summary (dotnet only)
-      - name: Generate Coverage Summary
-        if: ${{ inputs.language == 'dotnet' }}
-        run: |
-          COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
-          if [ -f "$COVERAGE_FILE" ]; then
-            reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
-            echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-            cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # Check SonarQube Quality Gate
+      # Check SonarQube Quality Gate (all languages)
       - name: Check SonarQube Quality Gate
         run: |
           STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" | jq -r '.projectStatus.status')
