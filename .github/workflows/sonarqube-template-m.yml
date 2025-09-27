@@ -149,7 +149,25 @@ jobs:
 
           elif [[ "${{ inputs.language }}" == "java" && -f "target/site/jacoco/jacoco.xml" ]]; then
             echo "## 🔎 Code Coverage Summary (Java)" >> $GITHUB_STEP_SUMMARY
-            grep -A 10 "<counter type=\"INSTRUCTION\"" target/site/jacoco/jacoco.xml || true
+          
+          INSTRUCTION=$(grep "<counter type=\"INSTRUCTION\"" target/site/jacoco/jacoco.xml | head -n1 | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/')
+          MISSED=$(echo $INSTRUCTION | awk '{print $1}')
+          COVERED=$(echo $INSTRUCTION | awk '{print $2}')
+          TOTAL=$((MISSED + COVERED))
+          PERCENT=$((100 * COVERED / TOTAL))
+
+          echo "| Metric       | Covered | Missed | Total | Coverage |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|---------|--------|-------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Instructions | $COVERED | $MISSED | $TOTAL | $PERCENT% |" >> $GITHUB_STEP_SUMMARY
+
+          # Do the same for LINE coverage
+          LINE=$(grep "<counter type=\"LINE\"" target/site/jacoco/jacoco.xml | head -n1 | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/')
+          MISSED=$(echo $LINE | awk '{print $1}')
+          COVERED=$(echo $LINE | awk '{print $2}')
+          TOTAL=$((MISSED + COVERED))
+          PERCENT=$((100 * COVERED / TOTAL))
+
+          echo "| Lines        | $COVERED | $MISSED | $TOTAL | $PERCENT% |" >> $GITHUB_STEP_SUMMARY
 
           elif [[ "${{ inputs.language }}" == "node" && -f "coverage/lcov.info" ]]; then
             echo "## 🔎 Code Coverage Summary (Node)" >> $GITHUB_STEP_SUMMARY
