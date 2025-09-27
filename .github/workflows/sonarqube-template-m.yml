@@ -75,9 +75,7 @@ jobs:
             dotnet tool install --global dotnet-reportgenerator-globaltool
             echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           elif [[ "${{ inputs.language }}" == "java" ]]; then
-            # curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.9.3.6977-linux.zip
-            # unzip -qq sonar-scanner-cli.zip -d $HOME/sonar-scanner
-            # echo "$HOME/sonar-scanner/sonar-scanner-4.9.3.6977-linux/bin" >> $GITHUB_PATH
+            echo "Install SonarScanner & tools for Java"
           else
             npm install -g sonar-scanner || pip install sonar-scanner
           fi
