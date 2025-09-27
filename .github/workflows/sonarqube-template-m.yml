@@ -96,10 +96,10 @@ jobs:
               COVERAGE_PATH="./build/reports/jacoco/test/jacocoTestReport.xml"
             fi
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey="$PROJECT_KEY" \
-            -Dsonar.organization="$ORG_KEY" \
-            -Dsonar.host.url="$SONAR_HOST" \
-            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.projectKey="${{ inputs.projectKey }}" \
+            -Dsonar.organization="${{ inputs.organizationKey }}" \
+            -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            -Dsonar.token="${{ secrets.SONAR_TOKEN }}" \
             -Dsonar.coverage.jacoco.xmlReportPaths="target/site/jacoco/jacoco.xml" \
             -Dsonar.exclusions="**/target/**,**/*.md,**/*.yml,**/Dockerfile"
           elif [[ "${{ inputs.language }}" == "node" ]]; then
