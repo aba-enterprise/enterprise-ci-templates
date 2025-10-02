@@ -1,0 +1,131 @@
+name: "Reusable DB Deployment"
+
+on:
+  workflow_call:
+    inputs:
+      db-type:
+        description: "Database type (mssql | oracle)"
+        required: true
+        type: string
+      changelog-file:
+        description: "Relative path to the Liquibase changelog XML"
+        required: true
+        type: string
+      environment:
+        description: "Environment name (dev | qa | prod)"
+        required: true
+        type: string
+      ecs-cluster:
+        description: "ECS Cluster name where DB deploy task runs"
+        required: true
+        type: string
+      ecs-subnets:
+        description: "Private subnet IDs (comma-separated)"
+        required: true
+        type: string
+      ecs-security-groups:
+        description: "Security group IDs (comma-separated)"
+        required: true
+        type: string
+      secret-arn:
+        description: "Secrets Manager ARN containing DB credentials"
+        required: true
+        type: string
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+jobs:
+  db-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout repo
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      # 2️⃣ Configure AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+
+      # 3️⃣ Package validated changelogs as artifact
+      - name: Upload Changelogs
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-changelogs
+          path: ${{ inputs.changelog-file }}
+
+      # 4️⃣ Create ECS Task Definition for DB Deployment
+      - name: Generate ECS Task Definition
+        id: taskdef
+        run: |
+          FAMILY="db-deploy-${{ inputs.environment }}"
+          CONTAINER_NAME="liquibase-runner"
+          IMAGE="liquibase/liquibase:latest"
+
+          case "${{ inputs.db-type }}" in
+            mssql)
+              JDBC_URL="jdbc:sqlserver://demo-sqlserver.${{ inputs.environment }}.rds.amazonaws.com:1433;databaseName=master"
+              ;;
+            oracle)
+              JDBC_URL="jdbc:oracle:thin:@demo-oracle.${{ inputs.environment }}.rds.amazonaws.com:1521/ORCLPDB1"
+              ;;
+            *)
+              echo "❌ Unsupported DB type: ${{ inputs.db-type }}"
+              exit 1
+              ;;
+          esac
+
+          # Escape JSON for ECS
+          cat <<EOF > task-def.json
+          {
+            "family": "$FAMILY",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecsTaskExecutionRole",
+            "taskRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole",
+            "containerDefinitions": [
+              {
+                "name": "$CONTAINER_NAME",
+                "image": "$IMAGE",
+                "command": [
+                  "--url=$JDBC_URL",
+                  "--changelog-file=/liquibase/changelog/${{ inputs.changelog-file }}",
+                  "--username=\$(aws secretsmanager get-secret-value --secret-id ${{ inputs.secret-arn }} --query SecretString --output text | jq -r .username)",
+                  "--password=\$(aws secretsmanager get-secret-value --secret-id ${{ inputs.secret-arn }} --query SecretString --output text | jq -r .password)",
+                  "update"
+                ],
+                "essential": true,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/db-deploy",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024"
+          }
+          EOF
+
+      # 5️⃣ Register ECS Task Definition
+      - name: Register ECS Task Definition
+        run: aws ecs register-task-definition --cli-input-json file://task-def.json
+
+      # 6️⃣ Run ECS Task in private VPC
+      - name: Run ECS Task
+        run: |
+          TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition db-deploy-${{ inputs.environment }} \
+                        --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          aws ecs run-task \
+            --cluster ${{ inputs.ecs-cluster }} \
+            --launch-type FARGATE \
+            --task-definition $TASK_DEF_ARN \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ inputs.ecs-subnets }}],securityGroups=[${{ inputs.ecs-security-groups }}],assignPublicIp=DISABLED}"
