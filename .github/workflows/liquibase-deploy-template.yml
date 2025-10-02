@@ -53,12 +53,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
      
-      # 1️⃣ Configure AWS credentials   
-      - name: Configure AWS Credentials
+      # 1️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws-region }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ROLE_ARN }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+          audience: sts.amazonaws.com
 
       - name: Install small toolset
         run: |
