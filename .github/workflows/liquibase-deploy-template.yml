@@ -42,16 +42,23 @@ on:
 jobs:
   run-liquibase:
     runs-on: ubuntu-latest
+    env:
+      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
+
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+
     steps:
       - uses: actions/checkout@v4
      
-      # 1️⃣ Configure AWS credentials
-      - name: Configure AWS credentials
+      # 1️⃣ Configure AWS credentials   
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
-          aws-region: us-east-2
-          audience: sts.amazonaws.com
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
 
       - name: Install small toolset
         run: |
