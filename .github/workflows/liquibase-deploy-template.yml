@@ -47,11 +47,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.deploy-environment }}
-    env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
-  
-    permissions:
-      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -60,8 +55,9 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws-region }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/${{ inputs.role-to-assume}}
+          aws-region: ${{inputs.aws-region}}
+          audience: sts.amazonaws.com
 
       - name: Install small toolset
         run: |
