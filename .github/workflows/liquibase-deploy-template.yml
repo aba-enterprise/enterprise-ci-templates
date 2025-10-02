@@ -1,0 +1,132 @@
+name: "Liquibase Deploy (reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        required: true
+        type: string
+      role-to-assume:
+        required: true
+        type: string
+      secret-arn:
+        required: false
+        type: string
+      db-type:
+        required: true
+        type: string
+      jdbc-url:
+        required: false
+        type: string
+      changelog-file:
+        required: true
+        type: string
+      liquibase-command:
+        required: false
+        type: string
+        default: "update"
+      liquibase-version:
+        required: false
+        type: string
+        default: "4.23.2"
+      contexts:
+        required: false
+        type: string
+      labels:
+        required: false
+        type: string
+      driver-jar-url:
+        required: false
+        type: string
+
+jobs:
+  run-liquibase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+     
+      # 1️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+          audience: sts.amazonaws.com
+
+      - name: Install small toolset
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Fetch DB creds from Secrets Manager
+        if: ${{ inputs.secret-arn != '' }}
+        run: |
+          secret=$(aws secretsmanager get-secret-value --secret-id "${{ inputs.secret-arn }}" --query SecretString --output text)
+          echo "$secret" > secret.json
+          echo "DB_USERNAME=$(jq -r .username secret.json)" >> $GITHUB_ENV
+          echo "DB_PASSWORD=$(jq -r .password secret.json)" >> $GITHUB_ENV
+          echo "DB_HOST=$(jq -r .host secret.json)" >> $GITHUB_ENV
+          echo "DB_PORT=$(jq -r .port secret.json)" >> $GITHUB_ENV
+          echo "DB_NAME=$(jq -r .dbname secret.json)" >> $GITHUB_ENV
+
+      - name: Build JDBC URL (if not provided)
+        run: |
+          if [ -n "${{ inputs.jdbc-url }}" ]; then
+            echo "JDBC_URL=${{ inputs.jdbc-url }}" >> $GITHUB_ENV
+          else
+            case "${{ inputs.db-type }}" in
+              postgres)
+                echo "JDBC_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}" >> $GITHUB_ENV;;
+              mysql)
+                echo "JDBC_URL=jdbc:mysql://${DB_HOST}:${DB_PORT:-3306}/${DB_NAME}" >> $GITHUB_ENV;;
+              mssql)
+                echo "JDBC_URL=jdbc:sqlserver://${DB_HOST}:${DB_PORT:-1433};databaseName=${DB_NAME}" >> $GITHUB_ENV;;
+              oracle)
+                # uses service name form; if you need SID form adjust accordingly
+                echo "JDBC_URL=jdbc:oracle:thin:@//${DB_HOST}:${DB_PORT:-1521}/${DB_NAME}" >> $GITHUB_ENV;;
+              *)
+                echo "Unsupported db-type: ${{ inputs.db-type }}" >&2
+                exit 1;;
+            esac
+          fi
+
+      - name: Download JDBC driver (if needed)
+        run: |
+          mkdir -p drivers
+          if [ -n "${{ inputs.driver-jar-url }}" ]; then
+            curl -sSL "${{ inputs.driver-jar-url }}" -o drivers/driver.jar
+          else
+            case "${{ inputs.db-type }}" in
+              postgres)
+                curl -sSL https://repo1.maven.org/maven2/org/postgresql/postgresql/42.6.0/postgresql-42.6.0.jar -o drivers/postgresql.jar ;;
+              mysql)
+                # some Liquibase images may not include MySQL driver; download it
+                curl -sSL https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.1.0/mysql-connector-java-8.1.0.jar -o drivers/mysql-connector-java.jar ;;
+              mssql)
+                curl -sSL https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/11.2.0/mssql-jdbc-11.2.0.jre11.jar -o drivers/mssql-jdbc.jar ;;
+              oracle)
+                echo "Oracle JDBC drivers must be provided by you (not on Maven Central in many cases). Upload to S3 or provide driver-jar-url." ; exit 1 ;;
+              *)
+                echo "Unknown db-type" ; exit 1 ;;
+            esac
+          fi
+
+      - name: Run Liquibase (docker)
+        env:
+          LIQUIBASE_VERSION: ${{ inputs.liquibase-version }}
+          LIQUIBASE_COMMAND: ${{ inputs.liquibase-command }}
+          CHANGELOG: ${{ inputs.changelog-file }}
+        run: |
+          EXTRA=""
+          if [ -n "${{ inputs.contexts }}" ]; then EXTRA="$EXTRA --contexts=${{ inputs.contexts }}"; fi
+          if [ -n "${{ inputs.labels }}" ]; then EXTRA="$EXTRA --labels=${{ inputs.labels }}"; fi
+
+          docker run --rm \
+            -v "${{ github.workspace }}:/liquibase/changelog" \
+            -v "${{ github.workspace }}/drivers:/liquibase/drivers" \
+            liquibase/liquibase:${LIQUIBASE_VERSION} \
+            --url="$JDBC_URL" \
+            --changeLogFile="/liquibase/changelog/${CHANGELOG}" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            $LIQUIBASE_COMMAND $EXTRA
