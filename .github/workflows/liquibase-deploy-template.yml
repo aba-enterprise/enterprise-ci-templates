@@ -38,10 +38,15 @@ on:
       driver-jar-url:
         required: false
         type: string
+      deploy-environment:
+        required: true
+        type: string
 
 jobs:
   run-liquibase:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.deploy-environment }}
     env:
       AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
 
