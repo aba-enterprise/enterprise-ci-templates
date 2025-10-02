@@ -49,6 +49,9 @@ jobs:
       name: ${{ inputs.deploy-environment }}
     env:
       AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
+  
+    permissions:
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
