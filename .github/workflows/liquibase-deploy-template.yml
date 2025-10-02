@@ -61,34 +61,49 @@ jobs:
       - name: Fetch DB creds from Secrets Manager
         if: ${{ inputs.secret-arn != '' }}
         run: |
-          secret=$(aws secretsmanager get-secret-value --secret-id "${{ inputs.secret-arn }}" --query SecretString --output text)
-          echo "$secret" > secret.json
-          echo "DB_USERNAME=$(jq -r .username secret.json)" >> $GITHUB_ENV
-          echo "DB_PASSWORD=$(jq -r .password secret.json)" >> $GITHUB_ENV
-          echo "DB_HOST=$(jq -r .host secret.json)" >> $GITHUB_ENV
-          echo "DB_PORT=$(jq -r .port secret.json)" >> $GITHUB_ENV
-          echo "DB_NAME=$(jq -r .dbname secret.json)" >> $GITHUB_ENV
+          # Fetch secret JSON from AWS Secrets Manager
+          secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${{ inputs.secret-arn }}" \
+            --query SecretString \
+            --output text)
+
+          # Extract values directly
+          DB_USERNAME=$(echo "$secret_json" | jq -r .username)
+          # DB_PASSWORD=$(echo "$secret_json" | jq -r .password)
+          DB_HOST=$(echo "$secret_json" | jq -r .host)
+          DB_PORT=$(echo "$secret_json" | jq -r .port)
+          DB_NAME=$(echo "$secret_json" | jq -r .dbname)
+
+          # Export only what is needed for next steps
+          echo "DB_USERNAME=$DB_USERNAME" >> $GITHUB_ENV
+          echo "DB_HOST=$DB_HOST" >> $GITHUB_ENV
+          echo "DB_PORT=$DB_PORT" >> $GITHUB_ENV
+          echo "DB_NAME=$DB_NAME" >> $GITHUB_ENV
+
+          # Note: DB_PASSWORD is sensitive — pass directly to Liquibase step instead of writing to $GITHUB_ENV
+          # echo "DB_PASSWORD=$DB_PASSWORD" >> $GITHUB_ENV # optional, can be passed only via env in docker run
 
       - name: Build JDBC URL (if not provided)
         run: |
           if [ -n "${{ inputs.jdbc-url }}" ]; then
-            echo "JDBC_URL=${{ inputs.jdbc-url }}" >> $GITHUB_ENV
+            JDBC_URL="${{ inputs.jdbc-url }}"
           else
             case "${{ inputs.db-type }}" in
               postgres)
-                echo "JDBC_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}" >> $GITHUB_ENV;;
+                JDBC_URL="jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}" ;;
               mysql)
-                echo "JDBC_URL=jdbc:mysql://${DB_HOST}:${DB_PORT:-3306}/${DB_NAME}" >> $GITHUB_ENV;;
+                JDBC_URL="jdbc:mysql://${DB_HOST}:${DB_PORT:-3306}/${DB_NAME}" ;;
               mssql)
-                echo "JDBC_URL=jdbc:sqlserver://${DB_HOST}:${DB_PORT:-1433};databaseName=${DB_NAME}" >> $GITHUB_ENV;;
+                JDBC_URL="jdbc:sqlserver://${DB_HOST}:${DB_PORT:-1433};databaseName=${DB_NAME}" ;;
               oracle)
-                # uses service name form; if you need SID form adjust accordingly
-                echo "JDBC_URL=jdbc:oracle:thin:@//${DB_HOST}:${DB_PORT:-1521}/${DB_NAME}" >> $GITHUB_ENV;;
+                JDBC_URL="jdbc:oracle:thin:@//${DB_HOST}:${DB_PORT:-1521}/${DB_NAME}" ;;
               *)
                 echo "Unsupported db-type: ${{ inputs.db-type }}" >&2
-                exit 1;;
+                exit 1 ;;
             esac
           fi
+
+          echo "JDBC_URL=$JDBC_URL" >> $GITHUB_ENV
 
       - name: Download JDBC driver (if needed)
         run: |
@@ -128,5 +143,8 @@ jobs:
             --url="$JDBC_URL" \
             --changeLogFile="/liquibase/changelog/${CHANGELOG}" \
             --username="$DB_USERNAME" \
-            --password="$DB_PASSWORD" \
+            --password="$(aws secretsmanager get-secret-value \
+                           --secret-id '${{ inputs.secret-arn }}' \
+                           --query SecretString \
+                           --output text | jq -r .password)" \
             $LIQUIBASE_COMMAND $EXTRA
