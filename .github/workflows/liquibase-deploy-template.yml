@@ -9,7 +9,7 @@ on:
       role-to-assume:
         required: true
         type: string
-      secret-arn:
+      secret-name:
         required: false
         type: string
       db-type:
@@ -59,11 +59,14 @@ jobs:
           sudo apt-get install -y jq curl
 
       - name: Fetch DB creds from Secrets Manager
-        if: ${{ inputs.secret-arn != '' }}
+        if: ${{ inputs.secret-name != '' }}
         run: |
+          
+          SECRET_ARN="arn:aws:secretsmanager:${{ inputs.aws-region}}:${{ vars.AWS_ACCOUNTID }}:secret:${{ inputs.secret-name }}"
+
           # Fetch secret JSON from AWS Secrets Manager
           secret_json=$(aws secretsmanager get-secret-value \
-            --secret-id "${{ inputs.secret-arn }}" \
+            --secret-id "$SECRET_ARN" \
             --query SecretString \
             --output text)
 
@@ -136,6 +139,8 @@ jobs:
           if [ -n "${{ inputs.contexts }}" ]; then EXTRA="$EXTRA --contexts=${{ inputs.contexts }}"; fi
           if [ -n "${{ inputs.labels }}" ]; then EXTRA="$EXTRA --labels=${{ inputs.labels }}"; fi
 
+          SECRET_ARN="arn:aws:secretsmanager:${{ inputs.aws-region}}:${{ vars.AWS_ACCOUNTID }}:secret:${{ inputs.secret-name }}"
+
           docker run --rm \
             -v "${{ github.workspace }}:/liquibase/changelog" \
             -v "${{ github.workspace }}/drivers:/liquibase/drivers" \
@@ -144,7 +149,7 @@ jobs:
             --changeLogFile="/liquibase/changelog/${CHANGELOG}" \
             --username="$DB_USERNAME" \
             --password="$(aws secretsmanager get-secret-value \
-                           --secret-id '${{ inputs.secret-arn }}' \
+                           --secret-id '$SECRET_ARN' \
                            --query SecretString \
                            --output text | jq -r .password)" \
             $LIQUIBASE_COMMAND $EXTRA
