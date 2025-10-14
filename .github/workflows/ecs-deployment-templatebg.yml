@@ -226,7 +226,7 @@ jobs:
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.color.outputs.IDLE_COLOR }}"
-          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-task}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
 
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
