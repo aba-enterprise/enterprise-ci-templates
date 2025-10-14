@@ -74,6 +74,11 @@ on:
         required: false
         type: string
         default: "8081"
+      auto-flip:
+        description: "Automatically flip traffic to new version after testing"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ecs-deploy:
@@ -207,13 +212,18 @@ jobs:
           fi
 
       # 🔟 Manual Flip Step (Idle → Active)
-      - name: Manual ALB Flip
+      - name: Flip Traffic to Idle Color (Auto)
+        if: ${{ inputs.auto-flip == 'true' }}
         run: |
           IDLE_TG=${{ steps.color.outputs.IDLE_TG }}
           LISTENER_ARN=${{ inputs.main-listener-arn }}
 
-          echo "Run this command manually to flip traffic to new color:"
-          echo "aws elbv2 modify-listener --listener-arn $LISTENER_ARN --default-actions Type=forward,TargetGroupArn=$IDLE_TG"
+          echo "Flipping traffic to new color..."
+          aws elbv2 modify-listener \
+            --listener-arn $LISTENER_ARN \
+            --default-actions Type=forward,TargetGroupArn=$IDLE_TG
+
+          echo "✅ Traffic successfully flipped to idle color."
 
       #  🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
       - name: Cleanup old ECS Task Definitions
