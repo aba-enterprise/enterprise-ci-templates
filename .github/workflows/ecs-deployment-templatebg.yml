@@ -235,19 +235,26 @@ jobs:
               --force-new-deployment
           else
             echo "Creating new ECS service..."
-            aws ecs create-service \
-              --cluster "$CLUSTER_NAME" \
-              --service-name "$SERVICE_NAME" \
-              --task-definition "$TASK_FAMILY" \
-              --desired-count "$DESIRED_COUNT" \
-              --launch-type FARGATE \
-              --network-configuration "{
-                \"awsvpcConfiguration\": {
-                  \"subnets\": $SUBNETS_JSON,
-                  \"securityGroups\": $SGS_JSON,
-                  \"assignPublicIp\": \"ENABLED\"
-                }
-              }"
+
+            NETWORK_CONFIG=$(cat <<EOF
+            {
+              "awsvpcConfiguration": {
+                "subnets": $SUBNETS_JSON,
+                "securityGroups": $SGS_JSON,
+                "assignPublicIp": "ENABLED"
+              }
+            }
+            EOF
+            )
+
+                  aws ecs create-service \
+                    --cluster "$CLUSTER_NAME" \
+                    --service-name "$SERVICE_NAME" \
+                    --task-definition "$TASK_FAMILY" \
+                    --desired-count "$DESIRED_COUNT" \
+                    --launch-type FARGATE \
+                    --network-configuration "$NETWORK_CONFIG"
+                fi
 
       # 6️⃣ Wait for ECS service to stabilize
       - name: Wait for idle color ECS service
