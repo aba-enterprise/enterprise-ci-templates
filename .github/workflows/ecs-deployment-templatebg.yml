@@ -99,11 +99,102 @@ jobs:
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
-      # 2️⃣ Generate ECS Task Definition (same as your original)
+      # 2️⃣ Generate ECS Task Definition
       - name: Generate ECS Task Definition
         id: generate-taskdef
         run: |
-          # ... (same as your current task-def generation) ...
+          set -euo pipefail
+
+          REPO_NAME=$(basename $GITHUB_REPOSITORY)       # get repo name only
+          BRANCH_NAME=$GITHUB_REF_NAME                   # branch name
+          SHORT_SHA=${GITHUB_SHA::7}                     # first 7 chars of SHA
+          IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
+
+          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
+          APP_LANGUAGE="${{ inputs.app-language }}"
+          ENVIRONMENT="${{ inputs.environment }}"
+          EXTRA_ENV="${{ inputs.extra-env }}"
+          # Default SERVICE_NAME, TASK_FAMILY, CONTAINER_NAME to repo name if user input is empty
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
+
+          # Base env variables from caller
+          ENV_VARS=$(jq -n \
+            --arg lang "$APP_LANGUAGE" \
+            --arg env "$ENVIRONMENT" \
+            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
+          
+          echo "User Input Values"
+          echo "Environment Variables - $ENV_VARS"
+          echo "Image Tag - $ECR_IMAGE"
+          echo "Application Language - $APP_LANGUAGE"
+          echo "Environment - $ENVIRONMENT"
+          echo "Extra Environment Variable - $EXTRA_ENV"
+
+          # Add language-specific environment variables
+          case "$APP_LANGUAGE" in
+            csharp)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
+                {"name":"DOTNET_USE_POLLING_FILE_WATCHER","value":"true"},
+                {"name":"DOTNET_SKIP_FIRST_TIME_EXPERIENCE","value":"true"},
+                {"name":"DOTNET_NOLOGO","value":"true"},
+                {"name":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT","value":"true"},
+                {"name":"ASPNETCORE_URLS","value":"http://+:8080"}
+              ]')
+              ;;
+            java)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}
+              ]')
+              ;;
+            node)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"}]')
+              ;;
+            python)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"}]')
+              ;;
+          esac
+
+          # Merge extra environment variables safely
+          if [ -n "$EXTRA_ENV" ] && [ "$EXTRA_ENV" != "[]" ]; then
+            # Validate JSON first
+            echo "$EXTRA_ENV" | jq . >/dev/null 2>&1 || { echo "❌ ERROR: extra-env is invalid JSON"; exit 1; }
+            ENV_VARS=$(echo "$ENV_VARS" | jq --argjson extra "$EXTRA_ENV" '. + $extra')
+          fi
+
+          echo "✅ Final environment variables:"
+          echo "$ENV_VARS"
+
+          # Generate task definition JSON
+          cat <<EOF > task-def.json
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "$CONTAINER_NAME",
+                "image": "$ECR_IMAGE",
+                "portMappings": [{"containerPort":8080,"protocol":"tcp"}],
+                "essential": true,
+                "environment": $ENV_VARS,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/$TASK_FAMILY",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "${{ inputs.cpu }}",
+            "memory": "${{ inputs.memory }}"
+          }
+          EOF
 
       # 3️⃣ Register ECS Task Definition
       - name: Register ECS Task Definition
