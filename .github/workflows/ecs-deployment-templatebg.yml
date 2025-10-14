@@ -85,6 +85,10 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment }}
+    outputs:
+      ACTIVE_COLOR: ${{ steps.set-colors.outputs.ACTIVE_COLOR }}
+      IDLE_COLOR: ${{ steps.set-colors.outputs.IDLE_COLOR }}
+      IDLE_TG: ${{ steps.set-colors.outputs.IDLE_TG }}
 
     permissions:
       id-token: write
@@ -105,34 +109,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          REPO_NAME=$(basename $GITHUB_REPOSITORY)       # get repo name only
-          BRANCH_NAME=$GITHUB_REF_NAME                   # branch name
-          SHORT_SHA=${GITHUB_SHA::7}                     # first 7 chars of SHA
+          REPO_NAME=$(basename $GITHUB_REPOSITORY)
+          SHORT_SHA=${GITHUB_SHA::7}
           IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
 
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
           EXTRA_ENV="${{ inputs.extra-env }}"
-          # Default SERVICE_NAME, TASK_FAMILY, CONTAINER_NAME to repo name if user input is empty
-          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$REPO_NAME}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
 
-          # Base env variables from caller
           ENV_VARS=$(jq -n \
             --arg lang "$APP_LANGUAGE" \
             --arg env "$ENVIRONMENT" \
             '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
-          
-          echo "User Input Values"
-          echo "Environment Variables - $ENV_VARS"
-          echo "Image Tag - $ECR_IMAGE"
-          echo "Application Language - $APP_LANGUAGE"
-          echo "Environment - $ENVIRONMENT"
-          echo "Extra Environment Variable - $EXTRA_ENV"
 
-          # Add language-specific environment variables
           case "$APP_LANGUAGE" in
             csharp)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
@@ -145,9 +139,7 @@ jobs:
               ]')
               ;;
             java)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
-                {"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}
-              ]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
               ;;
             node)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"}]')
@@ -157,17 +149,11 @@ jobs:
               ;;
           esac
 
-          # Merge extra environment variables safely
           if [ -n "$EXTRA_ENV" ] && [ "$EXTRA_ENV" != "[]" ]; then
-            # Validate JSON first
             echo "$EXTRA_ENV" | jq . >/dev/null 2>&1 || { echo "❌ ERROR: extra-env is invalid JSON"; exit 1; }
             ENV_VARS=$(echo "$ENV_VARS" | jq --argjson extra "$EXTRA_ENV" '. + $extra')
           fi
 
-          echo "✅ Final environment variables:"
-          echo "$ENV_VARS"
-
-          # Generate task definition JSON
           cat <<EOF > task-def.json
           {
             "family": "$TASK_FAMILY",
@@ -198,37 +184,44 @@ jobs:
 
       # 3️⃣ Register ECS Task Definition
       - name: Register ECS Task Definition
-        run: |
-          aws ecs register-task-definition --cli-input-json file://task-def.json
+        run: aws ecs register-task-definition --cli-input-json file://task-def.json
 
-      # 4️⃣ Determine idle color and target group
+      # 4️⃣ Determine idle color
       - name: Determine idle color
-        id: color
+        id: set-colors
         run: |
-          ACTIVE_TG=$(aws elbv2 describe-listeners \
-            --listener-arn ${{ inputs.main-listener-arn }} \
-            --query 'Listeners[0].DefaultActions[0].TargetGroupArn' --output text)
+          ALB_ARN="${{ inputs.alb-arn }}"
+          BLUE_TG="${{ inputs.blue-target-group }}"
+          GREEN_TG="${{ inputs.green-target-group }}"
 
-          if [ "$ACTIVE_TG" == "${{ inputs.blue-target-group }}" ]; then
-            echo "ACTIVE_COLOR=blue" >> $GITHUB_OUTPUT
-            echo "IDLE_COLOR=green" >> $GITHUB_OUTPUT
-            echo "IDLE_TG=${{ inputs.green-target-group }}" >> $GITHUB_OUTPUT
+          ACTIVE_TG=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "$ALB_ARN" \
+              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+              --output text)
+
+          if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
+              ACTIVE_COLOR="blue"
+              IDLE_COLOR="green"
+              IDLE_TG="$GREEN_TG"
           else
-            echo "ACTIVE_COLOR=green" >> $GITHUB_OUTPUT
-            echo "IDLE_COLOR=blue" >> $GITHUB_OUTPUT
-            echo "IDLE_TG=${{ inputs.blue-target-group }}" >> $GITHUB_OUTPUT
+              ACTIVE_COLOR="green"
+              IDLE_COLOR="blue"
+              IDLE_TG="$BLUE_TG"
           fi
+
+          echo "ACTIVE_COLOR=$ACTIVE_COLOR" >> $GITHUB_OUTPUT
+          echo "IDLE_COLOR=$IDLE_COLOR" >> $GITHUB_OUTPUT
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
           echo "Active color: $ACTIVE_COLOR, Idle color: $IDLE_COLOR"
 
-      # 5️⃣ Create or update ECS service for idle color
+      # 5️⃣ Deploy ECS service to idle color
       - name: Deploy to idle color ECS service
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
-          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.color.outputs.IDLE_COLOR }}"
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-task}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
-
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
           SGS_JSON=$(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")')
 
@@ -255,16 +248,15 @@ jobs:
                   \"assignPublicIp\": \"ENABLED\"
                 }
               }"
-          fi
 
       # 6️⃣ Wait for ECS service to stabilize
-      - name: Wait for idle color ECS service to stabilize
+      - name: Wait for idle color ECS service
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
-          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.color.outputs.IDLE_COLOR }}"
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
           echo "⏳ Waiting for ECS service to stabilize..."
           aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
-          echo "✅ ECS service for idle color is stable"
+          echo "✅ ECS service is stable"
 
       # 7️⃣ Check Target Group Health
       - name: Validate Target Group health
