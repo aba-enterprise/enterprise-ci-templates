@@ -220,8 +220,8 @@ jobs:
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-          SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-colors.outputs.IDLE_COLOR }}"  # blue/green
-          CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${BASE_SERVICE_NAME}-container}"        # static name
+          SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
+          CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${BASE_SERVICE_NAME}-container}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${BASE_SERVICE_NAME}-task}"
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
           SGS_JSON=$(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")')
@@ -234,7 +234,6 @@ jobs:
               --service "$SERVICE_NAME" \
               --task-definition "$TASK_FAMILY" \
               --desired-count "$DESIRED_COUNT" \
-              --load-balancers targetGroupArn=$IDLE_TG,containerName=$CONTAINER_NAME,containerPort=8080 \
               --force-new-deployment
           else
             echo "Creating new ECS service..."
