@@ -285,9 +285,25 @@ jobs:
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
-          echo "⏳ Waiting for ECS service to stabilize..."
-          aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
-          echo "✅ ECS service is stable"
+
+          # Check service status
+          SERVICE_STATUS=$(aws ecs describe-services \
+              --cluster "$CLUSTER_NAME" \
+              --services "$SERVICE_NAME" \
+              --query 'services[0].status' \
+              --output text || echo "NONE")
+
+          if [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
+              echo "⏳ Waiting for ECS service to stabilize..."
+              aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+              echo "✅ ECS service is stable"
+          elif [[ "$SERVICE_STATUS" == "DRAINING" ]]; then
+              echo "Service is draining. ⏳ Waiting for cleanup..."
+              aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+              echo "✅ ECS service drained"
+          else
+              echo "Service is $SERVICE_STATUS. Skipping wait."
+          fi
 
       # 7️⃣ Check Target Group Health
       - name: Validate Target Group health
