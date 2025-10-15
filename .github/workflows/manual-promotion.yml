@@ -38,6 +38,15 @@ jobs:
       url: https://${{ inputs.environment }}.yourapp.company.com
 
     steps:
+        
+      # 1️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+          audience: sts.amazonaws.com
+        
       # 1️⃣ Determine idle color
       - name: Determine active and idle color
         id: set-colors
