@@ -78,7 +78,7 @@ on:
         description: "Automatically flip traffic to new version after testing"
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   ecs-deploy:
@@ -316,7 +316,7 @@ jobs:
 
           echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
 
-      # 🔟 Manual Flip Step (Idle → Active)
+      # 🔟 Manual Flip Step
       - name: Flip Traffic to Idle Color (Auto)
         if: ${{ inputs.auto-flip }}
         run: |
