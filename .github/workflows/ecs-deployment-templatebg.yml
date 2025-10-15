@@ -227,8 +227,14 @@ jobs:
           SGS_JSON=$(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")')
           IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
 
-          if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].status' --output text | grep -q "ACTIVE"; then
-            echo "Updating existing ECS service..."
+          SERVICE_STATUS=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME" \
+          --query 'services[0].status' \
+          --output text 2>/dev/null || echo "MISSING")
+          
+          if [ "$SERVICE_STATUS" == "ACTIVE" ]; then
+            echo "Updating existing ( $SERVICE_NAME )ECS service..."
             aws ecs update-service \
               --cluster "$CLUSTER_NAME" \
               --service "$SERVICE_NAME" \
@@ -236,8 +242,7 @@ jobs:
               --desired-count "$DESIRED_COUNT" \
               --force-new-deployment
           else
-            echo "Creating new ECS service..."
-
+            echo "Service not found or inactive (status: $SERVICE_STATUS). Creating new ECS service..."
             NETWORK_CONFIG=$(cat <<EOF
           {
             "awsvpcConfiguration": {
