@@ -23,6 +23,9 @@ on:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
         type: string
+      idle-tg:
+        required: false
+        type: string
 
 jobs:
   promote:
@@ -80,6 +83,7 @@ jobs:
 
       - name: Get idle color from previous Job
         run: |
+          echo "Got IDLE_TG: ${{ inputs.idle-tg }}"
           echo "ACTIVE_COLOR=${{ steps.set-colors.outputs.ACTIVE_COLOR }}"
           echo "IDLE_COLOR=${{ steps.set-colors.outputs.IDLE_COLOR }}"
           echo "IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}"
