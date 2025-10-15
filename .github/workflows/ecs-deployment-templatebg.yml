@@ -332,19 +332,19 @@ jobs:
 
           echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
 
-      # 🔟 Manual Flip Step
-      - name: Flip Traffic to Idle Color (Auto)
-        if: ${{ inputs.manual-flip }}
-        run: |
-          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
-          LISTENER_ARN=${{ inputs.main-listener-arn }}
+      # # 🔟 Manual Flip Step
+      # - name: Flip Traffic to Idle Color (Auto)
+      #   if: ${{ inputs.manual-flip }}
+      #   run: |
+      #     IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
+      #     LISTENER_ARN=${{ inputs.main-listener-arn }}
 
-          echo "Flipping traffic to new color..."
-          aws elbv2 modify-listener \
-            --listener-arn "$LISTENER_ARN" \
-            --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
+      #     echo "Flipping traffic to new color..."
+      #     aws elbv2 modify-listener \
+      #       --listener-arn "$LISTENER_ARN" \
+      #       --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
 
-          echo "✅ Traffic successfully flipped to idle color."
+      #     echo "✅ Traffic successfully flipped to idle color."
 
        # 9️⃣ Delete temporary listener after testing
       - name: Remove Temporary Listener
