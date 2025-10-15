@@ -317,27 +317,27 @@ jobs:
           echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
 
       # 🔟 Manual Flip Step (Idle → Active)
-      # - name: Flip Traffic to Idle Color (Auto)
-      #   if: ${{ inputs.auto-flip == 'true' }}
-      #   run: |
-      #     IDLE_TG=${{ steps.color.outputs.IDLE_TG }}
-      #     LISTENER_ARN=${{ inputs.main-listener-arn }}
+      - name: Flip Traffic to Idle Color (Auto)
+        if: ${{ inputs.auto-flip }}
+        run: |
+          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
+          LISTENER_ARN=${{ inputs.main-listener-arn }}
 
-      #     echo "Flipping traffic to new color..."
-      #     aws elbv2 modify-listener \
-      #       --listener-arn $LISTENER_ARN \
-      #       --default-actions Type=forward,TargetGroupArn=$IDLE_TG
+          echo "Flipping traffic to new color..."
+          aws elbv2 modify-listener \
+            --listener-arn "$LISTENER_ARN" \
+            --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
 
-      #     echo "✅ Traffic successfully flipped to idle color."
+          echo "✅ Traffic successfully flipped to idle color."
 
        # 9️⃣ Delete temporary listener after testing
-      # - name: Remove Temporary Listener
-      #   if: ${{ inputs.use-temp-listener }}
-      #   run: |
-      #     if [ -n "${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}" ]; then
-      #       aws elbv2 delete-listener --listener-arn ${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}
-      #       echo "✅ Temporary listener removed."
-      #     fi
+      - name: Remove Temporary Listener
+        if: ${{ inputs.use-temp-listener }}
+        run: |
+          if [ -n "${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}" ]; then
+            aws elbv2 delete-listener --listener-arn ${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}
+            echo "✅ Temporary listener removed."
+          fi
 
       #  🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
       - name: Cleanup old ECS Task Definitions
