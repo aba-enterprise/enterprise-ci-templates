@@ -117,8 +117,9 @@ jobs:
       - name: Scale down old service
         run: |
           echo "Scaling down old ($ACTIVE_COLOR) ECS service: $OLD_SERVICE"
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           aws ecs update-service \
-            --cluster "${{ inputs.ecs-cluster-name }}" \
+            --cluster "$CLUSTER_NAME" \
             --service "$OLD_SERVICE" \
             --desired-count 0
           echo "✅ Old service scaled down to 0. Blue/Green cleanup complete."
