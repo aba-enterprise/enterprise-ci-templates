@@ -79,6 +79,20 @@ on:
         required: false
         type: boolean
         default: false
+    # 👇 This will be use in next Jobs
+    outputs:
+      ACTIVE_COLOR:
+        description: "The active color after deployment"
+        value: ${{ jobs.ecs-deploy.outputs.ACTIVE_COLOR }}
+      IDLE_COLOR:
+        description: "The idle color after deployment"
+        value: ${{ jobs.ecs-deploy.outputs.IDLE_COLOR }}
+      IDLE_TG:
+        description: "The idle target group ARN"
+        value: ${{ jobs.ecs-deploy.outputs.IDLE_TG }}
+      TEMP_LISTENER_ARN:
+        description: "Temporary listener ARN"
+        value: ${{ jobs.ecs-deploy.outputs.TEMP_LISTENER_ARN }}
 
 jobs:
   ecs-deploy:
