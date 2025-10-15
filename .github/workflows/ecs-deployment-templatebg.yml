@@ -328,7 +328,8 @@ jobs:
             --port $TEMP_PORT \
             --default-actions Type=forward,TargetGroupArn=$IDLE_TG \
             --query 'Listeners[0].ListenerArn' --output text)
-          echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
+          
+            echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
 
           echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
 
