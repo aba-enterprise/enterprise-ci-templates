@@ -269,7 +269,7 @@ jobs:
       # 7️⃣ Check Target Group Health
       - name: Validate Target Group health
         run: |
-          IDLE_TG=${{ steps.color.outputs.IDLE_TG }}
+          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
           echo "Checking target health for idle color TG: $IDLE_TG"
           aws elbv2 describe-target-health --target-group-arn $IDLE_TG
 
@@ -278,7 +278,7 @@ jobs:
         if: ${{ inputs.use-temp-listener }}
         id: temp_listener
         run: |
-          IDLE_TG=${{ steps.color.outputs.IDLE_TG }}
+          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
           TEMP_PORT=${{ inputs.temp-listener-port }}
           ALB_ARN=${{ inputs.alb-arn }}
 
