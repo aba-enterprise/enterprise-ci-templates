@@ -233,6 +233,7 @@ jobs:
               --service "$SERVICE_NAME" \
               --task-definition "$TASK_FAMILY" \
               --desired-count "$DESIRED_COUNT" \
+              --load-balancers targetGroupArn=$IDLE_TG,containerName=$CONTAINER_NAME,containerPort=8080 \
               --force-new-deployment
           else
             echo "Creating new ECS service..."
