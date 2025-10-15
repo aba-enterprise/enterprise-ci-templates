@@ -11,11 +11,11 @@ on:
         description: "Primary ALB listener ARN"
         required: true
         type: string
-      blue-tg-arn:
+      blue-target-group:
         description: "Blue Target Group ARN"
         required: true
         type: string
-      green-tg-arn:
+      green-target-group:
         description: "Green Target Group ARN"
         required: true
         type: string
