@@ -7,43 +7,23 @@ on:
         description: "Target environment (e.g., dev, stage, prod)"
         required: true
         type: string
-
-      ecs-cluster-name:
-        description: "ECS cluster name"
-        required: true
-        type: string
-
       main-listener-arn:
         description: "Primary ALB listener ARN"
         required: true
         type: string
-
       blue-tg-arn:
         description: "Blue Target Group ARN"
         required: true
         type: string
-
       green-tg-arn:
         description: "Green Target Group ARN"
         required: true
         type: string
-
-      blue-service-name:
-        description: "ECS service name for Blue environment"
-        required: true
-        type: string
-
-      green-service-name:
-        description: "ECS service name for Green environment"
-        required: true
-        type: string
-
       manual-flip:
         description: "Manually flip traffic to idle service (true/false)"
         required: false
         type: boolean
         default: false
-
       temp-listener-arn:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
