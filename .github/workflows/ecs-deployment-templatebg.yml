@@ -162,7 +162,7 @@ jobs:
             "containerDefinitions": [
               {
                 "name": "$CONTAINER_NAME",
-                "image": "$ECR_IMAGE",
+                "image": "707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-23c3edb",
                 "portMappings": [{"containerPort":8080,"protocol":"tcp"}],
                 "essential": true,
                 "environment": $ENV_VARS,
