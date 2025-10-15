@@ -97,8 +97,9 @@ on:
 jobs:
   ecs-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.environment }}
+    # environment:
+    #   name: ${{ inputs.environment }}
+    environment: ${{ inputs.environment == 'dev' && 'dev' || '' }} # only prod requires approval
     outputs:
       ACTIVE_COLOR: ${{ steps.set-colors.outputs.ACTIVE_COLOR }}
       IDLE_COLOR: ${{ steps.set-colors.outputs.IDLE_COLOR }}
