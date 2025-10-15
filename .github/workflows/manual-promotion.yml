@@ -19,11 +19,6 @@ on:
         description: "Green Target Group ARN"
         required: true
         type: string
-      manual-flip:
-        description: "Manually flip traffic to idle service (true/false)"
-        required: false
-        type: boolean
-        default: false
       temp-listener-arn:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
@@ -85,7 +80,6 @@ jobs:
 
       # 2️⃣ Manual flip traffic
       - name: Flip Traffic to Idle Color
-        if: ${{ inputs.manual-flip }}
         run: |
           echo "Flipping traffic to $IDLE_COLOR..."
           aws elbv2 modify-listener \
