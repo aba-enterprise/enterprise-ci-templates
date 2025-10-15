@@ -74,11 +74,11 @@ on:
         required: false
         type: string
         default: "8081"
-      auto-flip:
+      manual-flip:
         description: "Automatically flip traffic to new version after testing"
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   ecs-deploy:
@@ -334,7 +334,7 @@ jobs:
 
       # 🔟 Manual Flip Step
       - name: Flip Traffic to Idle Color (Auto)
-        if: ${{ inputs.auto-flip }}
+        if: ${{ inputs.manual-flip }}
         run: |
           IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
           LISTENER_ARN=${{ inputs.main-listener-arn }}
