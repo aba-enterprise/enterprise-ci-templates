@@ -23,8 +23,17 @@ on:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
         type: string
+      active-color:
+        required: true
+        description: "This is an live deployment"
+        type: string
+      idel-color:
+        required: true
+        description: "This is for new version deployment"
+        type: string
       idle-tg:
-        required: false
+        required: true
+        description: "The idle target group ARN"
         type: string
 
 jobs:
@@ -83,14 +92,15 @@ jobs:
 
       - name: Get idle color from previous Job
         run: |
-          echo "Got IDLE_TG: ${{ inputs.idle-tg }}"
-          echo "ACTIVE_COLOR=${{ steps.set-colors.outputs.ACTIVE_COLOR }}"
-          echo "IDLE_COLOR=${{ steps.set-colors.outputs.IDLE_COLOR }}"
-          echo "IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}"
+          echo "ACTIVE_COLOR=${{ inputs.active-color }}"
+          echo "IDLE_COLOR=${{ inputs.idel-color }}"
+          echo "IDLE_TG=${{ inputs.idle-tg}}"
 
       # 2️⃣ Manual flip traffic
-      - name: Flip Traffic to Idle Color
+      - name: Flip Traffic to New Version
         run: |
+          IDLE_TG=${{ inputs.idle-tg}}
+          IDLE_COLOR=${{ inputs.idel-color }}
           echo "Flipping traffic to $IDLE_COLOR..."
           aws elbv2 modify-listener \
             --listener-arn "${{ inputs.main-listener-arn }}" \
@@ -109,6 +119,7 @@ jobs:
       # 4️⃣ Scale down old ECS service
       - name: Scale down old service
         run: |
+          ACTIVE_COLOR=${{ inputs.active-color }}
           echo "Scaling down old ($ACTIVE_COLOR) ECS service: $OLD_SERVICE"
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           aws ecs update-service \
