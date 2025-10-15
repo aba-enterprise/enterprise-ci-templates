@@ -346,7 +346,7 @@ jobs:
 
       #     echo "✅ Traffic successfully flipped to idle color."
 
-       # 9️⃣ Delete temporary listener after testing
+      #  # 9️⃣ Delete temporary listener after testing
       # - name: Remove Temporary Listener
       #   if: ${{ inputs.use-temp-listener }}
       #   run: |

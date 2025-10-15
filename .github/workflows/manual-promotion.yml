@@ -1,0 +1,83 @@
+name: Manual Promotion (Blue/Green)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment (e.g., dev, stage, prod)"
+        required: true
+        type: string
+
+      main-listener-arn:
+        description: "Primary ALB listener ARN"
+        required: true
+        type: string
+
+      blue-tg-arn:
+        description: "Blue Target Group ARN"
+        required: true
+        type: string
+
+      green-tg-arn:
+        description: "Green Target Group ARN"
+        required: true
+        type: string
+
+      require-approval:
+        description: "Require manual approval before flipping traffic (true for prod)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  promote:
+    name: Promote Idle Deployment to Live
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      # ✅ If prod, GitHub environment-level approval is enforced here
+      url: https://${{ inputs.environment }}.yourapp.company.com
+
+    steps:
+      - name: 🚦 Pre-Approval (Prod Only)
+        if: ${{ inputs.require-approval }}
+        run: |
+          echo "⏸️ Waiting for manual approval before flipping traffic..."
+          echo "Please approve the deployment in the 'Review deployments' tab to continue."
+
+      - name: 🧩 Determine Active and Idle Target Groups
+        id: tg-check
+        run: |
+          echo "Fetching current listener configuration..."
+          CURRENT_TG=$(aws elbv2 describe-listeners \
+            --listener-arns "${{ inputs.main-listener-arn }}" \
+            --query "Listeners[0].DefaultActions[0].TargetGroupArn" \
+            --output text)
+
+          echo "Current active TG: $CURRENT_TG"
+
+          if [ "$CURRENT_TG" = "${{ inputs.blue-tg-arn }}" ]; then
+            IDLE_TG="${{ inputs.green-tg-arn }}"
+            IDLE_COLOR="green"
+          elif [ "$CURRENT_TG" = "${{ inputs.green-tg-arn }}" ]; then
+            IDLE_TG="${{ inputs.blue-tg-arn }}"
+            IDLE_COLOR="blue"
+          else
+            echo "❌ ERROR: Current TG does not match known blue or green TGs."
+            exit 1
+          fi
+
+          echo "Idle color determined: $IDLE_COLOR"
+          echo "Idle TG ARN: $IDLE_TG"
+
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_ENV
+          echo "IDLE_COLOR=$IDLE_COLOR" >> $GITHUB_ENV
+
+      - name: 🔁 Flip Traffic to Idle Target Group
+        run: |
+          echo "Flipping traffic to $IDLE_COLOR environment..."
+          aws elbv2 modify-listener \
+            --listener-arn "${{ inputs.main-listener-arn }}" \
+            --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
+
+          echo "✅ Traffic successfully flipped to $IDLE_COLOR environment (now live)."
