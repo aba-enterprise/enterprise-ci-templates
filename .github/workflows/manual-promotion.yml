@@ -8,6 +8,11 @@ on:
         required: true
         type: string
 
+      ecs-cluster-name:
+        description: "ECS cluster name"
+        required: true
+        type: string
+
       main-listener-arn:
         description: "Primary ALB listener ARN"
         required: true
@@ -23,11 +28,26 @@ on:
         required: true
         type: string
 
-      require-approval:
-        description: "Require manual approval before flipping traffic (true for prod)"
+      blue-service-name:
+        description: "ECS service name for Blue environment"
+        required: true
+        type: string
+
+      green-service-name:
+        description: "ECS service name for Green environment"
+        required: true
+        type: string
+
+      manual-flip:
+        description: "Manually flip traffic to idle service (true/false)"
         required: false
         type: boolean
         default: false
+
+      temp-listener-arn:
+        description: "Temporary listener ARN (if created during deployment)"
+        required: false
+        type: string
 
 jobs:
   promote:
@@ -35,49 +55,70 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment }}
-      # ✅ If prod, GitHub environment-level approval is enforced here
       url: https://${{ inputs.environment }}.yourapp.company.com
 
     steps:
-      - name: 🚦 Pre-Approval (Prod Only)
-        if: ${{ inputs.require-approval }}
+      # 1️⃣ Determine idle color
+      - name: Determine active and idle color
+        id: set-colors
         run: |
-          echo "⏸️ Waiting for manual approval before flipping traffic..."
-          echo "Please approve the deployment in the 'Review deployments' tab to continue."
+         BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
 
-      - name: 🧩 Determine Active and Idle Target Groups
-        id: tg-check
-        run: |
-          echo "Fetching current listener configuration..."
-          CURRENT_TG=$(aws elbv2 describe-listeners \
+            # Construct ECS service names dynamically
+            BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
+            GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
+
+            echo "Blue Service: $BLUE_SERVICE"
+            echo "Green Service: $GREEN_SERVICE"
+          
+            ACTIVE_TG=$(aws elbv2 describe-listeners \
             --listener-arns "${{ inputs.main-listener-arn }}" \
             --query "Listeners[0].DefaultActions[0].TargetGroupArn" \
             --output text)
 
-          echo "Current active TG: $CURRENT_TG"
-
-          if [ "$CURRENT_TG" = "${{ inputs.blue-tg-arn }}" ]; then
-            IDLE_TG="${{ inputs.green-tg-arn }}"
-            IDLE_COLOR="green"
-          elif [ "$CURRENT_TG" = "${{ inputs.green-tg-arn }}" ]; then
-            IDLE_TG="${{ inputs.blue-tg-arn }}"
-            IDLE_COLOR="blue"
+          if [ "$ACTIVE_TG" = "${{ inputs.blue-tg-arn }}" ]; then
+              ACTIVE_COLOR="blue"
+              IDLE_COLOR="green"
+              IDLE_TG="${{ inputs.green-tg-arn }}"
+              OLD_SERVICE="$BLUE_SERVICE"
           else
-            echo "❌ ERROR: Current TG does not match known blue or green TGs."
-            exit 1
+              ACTIVE_COLOR="green"
+              IDLE_COLOR="blue"
+              IDLE_TG="${{ inputs.blue-tg-arn }}"
+              OLD_SERVICE="$GREEN_SERVICE"
           fi
 
-          echo "Idle color determined: $IDLE_COLOR"
-          echo "Idle TG ARN: $IDLE_TG"
-
-          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_ENV
+          echo "ACTIVE_COLOR=$ACTIVE_COLOR" >> $GITHUB_ENV
           echo "IDLE_COLOR=$IDLE_COLOR" >> $GITHUB_ENV
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_ENV
+          echo "OLD_SERVICE=$OLD_SERVICE" >> $GITHUB_ENV
+          echo "Active color: $ACTIVE_COLOR, Idle color: $IDLE_COLOR"
 
-      - name: 🔁 Flip Traffic to Idle Target Group
+      # 2️⃣ Manual flip traffic
+      - name: Flip Traffic to Idle Color
+        if: ${{ inputs.manual-flip }}
         run: |
-          echo "Flipping traffic to $IDLE_COLOR environment..."
+          echo "Flipping traffic to $IDLE_COLOR..."
           aws elbv2 modify-listener \
             --listener-arn "${{ inputs.main-listener-arn }}" \
             --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
 
-          echo "✅ Traffic successfully flipped to $IDLE_COLOR environment (now live)."
+          echo "✅ Traffic successfully flipped to $IDLE_COLOR"
+
+      # 3️⃣ Remove temporary listener if exists
+      - name: Remove Temporary Listener
+        if: ${{ inputs.temp-listener-arn }}
+        run: |
+          echo "Removing temporary listener: ${{ inputs.temp-listener-arn }}"
+          aws elbv2 delete-listener --listener-arn "${{ inputs.temp-listener-arn }}"
+          echo "✅ Temporary listener removed"
+
+      # 4️⃣ Scale down old ECS service
+      - name: Scale down old service
+        run: |
+          echo "Scaling down old ($ACTIVE_COLOR) ECS service: $OLD_SERVICE"
+          aws ecs update-service \
+            --cluster "${{ inputs.ecs-cluster-name }}" \
+            --service "$OLD_SERVICE" \
+            --desired-count 0
+          echo "✅ Old service scaled down to 0. Blue/Green cleanup complete."
