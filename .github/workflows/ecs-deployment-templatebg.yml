@@ -78,6 +78,8 @@ on:
         value: ${{ jobs.ecs-deploy.outputs.IDLE_TG }}
       TEMP_LISTENER_ARN:
         value: ${{ jobs.ecs-deploy.outputs.TEMP_LISTENER_ARN }}
+      IS_FIRST_DEPLOY: 
+        value: ${{ jobs.ecs-deploy.outputs.IS_FIRST_DEPLOY }}
 
 jobs:
   ecs-deploy:
