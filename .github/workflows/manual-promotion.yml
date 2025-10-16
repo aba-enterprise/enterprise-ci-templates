@@ -62,7 +62,7 @@ jobs:
 
       # 2️⃣ Manual flip traffic
       - name: Flip Traffic to New Version
-        if: ${{ inputs.active-tg != '' }}  # Skip first deployment
+        if: ${{ inputs.idle-tg != '' }}  # Skip first deployment
         run: |
           IDLE_TG=${{ inputs.idle-tg}}
           IDLE_COLOR=${{ inputs.idel-color }}
@@ -83,7 +83,7 @@ jobs:
 
       # 4️⃣ Scale down old ECS service
       - name: Scale down old service
-        if: ${{ inputs.active-tg != '' }}  # Skip first deployment
+        if: ${{ inputs.idle-tg != '' }}  # Skip first deployment
         run: |
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
