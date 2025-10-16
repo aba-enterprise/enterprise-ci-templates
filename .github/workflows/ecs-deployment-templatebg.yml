@@ -87,10 +87,11 @@ jobs:
       id-token: write
       contents: read
     outputs:
-      LIVE_SERVICE: ${{ steps.set-colors.outputs.LIVE_SERVICE }}
-      IDLE_SERVICE: ${{ steps.set-colors.outputs.IDLE_SERVICE }}
-      IDLE_TG: ${{ steps.set-colors.outputs.IDLE_TG }}
+      LIVE_SERVICE: ${{ steps.set-services.outputs.LIVE_SERVICE }}
+      IDLE_SERVICE: ${{ steps.set-services.outputs.IDLE_SERVICE }}
+      IDLE_TG: ${{ steps.set-services.outputs.IDLE_TG }}
       TEMP_LISTENER_ARN: ${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}
+      IS_FIRST_DEPLOY: ${{ steps.set-services.outputs.IS_FIRST_DEPLOY }}
 
     steps:
       # 1️⃣ Configure AWS credentials
@@ -182,7 +183,7 @@ jobs:
 
       # 4️⃣ Determine idle color (handles first-time deployment safely)
       - name: Determine Idle Service (Blue/Green)
-        id: set-colors
+        id: set-services
         run: |
           ALB_ARN="${{ inputs.alb-arn }}"
           BLUE_TG="${{ inputs.blue-target-group }}"
@@ -229,19 +230,18 @@ jobs:
           echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
           echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE"
 
-
       # 5️⃣ Deploy ECS service to idle color
-      - name: Deploy to idle color ECS service
+      - name: Deploy to Idle ECS Service ECS
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-          SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-colors.outputs.IDLE_SERVICE }}"
+          SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${BASE_SERVICE_NAME}-container}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${BASE_SERVICE_NAME}-task}"
           SUBNETS_JSON=$(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")')
           SGS_JSON=$(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")')
-          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
 
           BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
           GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
@@ -255,9 +255,9 @@ jobs:
               SERVICE_NAME="$BLUE_SERVICE"
               IDLE_TG="${{ inputs.blue-target-group }}"
           else
-              # Use the existing set-colors logic for idle color
-              SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-colors.outputs.IDLE_SERVICE }}"
-              IDLE_TG="${{ steps.set-colors.outputs.IDLE_TG }}"
+              # Use the existing set-services logic for idle color
+              SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
+              IDLE_TG="${{ steps.set-services.outputs.IDLE_TG }}"
           fi
 
           SERVICE_STATUS=$(aws ecs describe-services \
@@ -300,7 +300,7 @@ jobs:
       - name: Wait for ECS service to stabilize
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
-          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_SERVICE }}"
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
 
           echo "Waiting for ECS service '$SERVICE_NAME' to become active..."
           # Loop until service exists and is stable, or timeout
@@ -342,7 +342,7 @@ jobs:
       # 7️⃣ Check Target Group Health
       - name: Validate Target Group health
         run: |
-          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
           echo "Checking target health for idle color TG: $IDLE_TG"
           aws elbv2 describe-target-health --target-group-arn $IDLE_TG
 
@@ -351,7 +351,7 @@ jobs:
         if: ${{ inputs.use-temp-listener }}
         id: temp_listener
         run: |
-          IDLE_TG=${{ steps.set-colors.outputs.IDLE_TG }}
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
           TEMP_PORT=${{ inputs.temp-listener-port }}
           ALB_ARN=${{ inputs.alb-arn }}
 

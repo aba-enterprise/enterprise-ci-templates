@@ -23,10 +23,10 @@ on:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
         type: string
-      # active-service:
-      #   required: true
-      #   description: "This is an live deployment"
-      #   type: string
+      is-first-deploy:
+        description: "Flag to indicate first deployment"
+        required: true
+        type: boolean
       idle-service:
         required: true
         description: "This is for new version deployment"
@@ -54,35 +54,22 @@ jobs:
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
-      - name: Get idle color from previous Job
-        run: |
-          # echo "ACTIVE_COLOR=${{ inputs.active-service }}"
-          echo "IDLE_COLOR=${{ inputs.idle-tg }}"
-          echo "IDLE_COLOR=${{ inputs.idle-service }}"
-          echo "IDLE_TG=${{ inputs.idle-tg}}"
+      # - name: Get idle color from previous Job
+      #   run: |
+      #     # echo "ACTIVE_COLOR=${{ inputs.active-service }}"
+      #     echo "IDLE_COLOR=${{ inputs.idle-tg }}"
+      #     echo "IDLE_COLOR=${{ inputs.idle-service }}"
+      #     echo "IDLE_TG=${{ inputs.idle-tg}}"
 
       # 2️⃣ Flip Traffic to New Version
-      - name: Flip Traffic to New Version (Skip if First Deployment)
-        id: flip
-        if: ${{ inputs.idle-tg != '' }}  # Skip first deployment
+      - name: Flip Traffic to New Version
+        if: ${{ inputs.is-first-deploy == false }}
         run: |
-          IDLE_TG=${{ inputs.idle-tg}}
-          IDLE_COLOR=${{ inputs.idle-service }}
-          echo "Flipping traffic to $IDLE_COLOR..."
-          COUNT=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
-            --query 'TargetHealthDescriptions | length(@)' --output text)
-          
-          echo "Idle TG registered targets count: $COUNT"
-          if [ "$COUNT" -eq 0 ]; then
-            aws elbv2 modify-listener \
-              --listener-arn "${{ inputs.main-listener-arn }}" \
-              --default-actions '[{"Type":"forward","TargetGroupArn":"'"$IDLE_TG"'"}]'
-            echo "✅ Traffic successfully flipped to $IDLE_COLOR"
-            echo "skip_flip=true" >> $GITHUB_OUTPUT
-          else
-            echo "This is first time ($IDLE_COLOR) deployment; no traffic flip needed."
-            echo "skip_flip=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
+          aws elbv2 modify-listener \
+            --listener-arn "${{ inputs.main-listener-arn }}" \
+            --default-actions '[{"Type":"forward","TargetGroupArn":"'"${{ inputs.idle-tg }}"'"}]'
+          echo "✅ Traffic successfully flipped to ${{ inputs.idle-service }}"
 
       # 3️⃣ Remove temporary listener if exists
       - name: Remove Temporary Listener
@@ -93,38 +80,17 @@ jobs:
           echo "✅ Temporary listener removed"
 
       # 4️⃣ Scale down old ECS service
-      - name: Scale down old service
-        if: ${{ steps.flip.outputs.skip_flip == 'true' }}  # Only run if traffic was flipped
+      - name: Scale Down Old Active Service
+        if: ${{ inputs.is-first-deploy == 'false' }}  # Skip first deployment
         run: |
-          set -e  # Stop if any command fails
-
+          set -e
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename "$GITHUB_REPOSITORY")}"
-          BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
-          GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
+          ACTIVE_SERVICE="${{ inputs.active-service }}"
 
-          ACTIVE_TG="${{ inputs.active-tg }}"
-          BLUE_TG="${{ inputs.blue-tg-arn }}"
-          GREEN_TG="${{ inputs.green-tg-arn }}"
-
-          if [ "$ACTIVE_TG" = "$BLUE_TG" ]; then
-            ACTIVE_SERVICE="$BLUE_SERVICE"
-            IDLE_SERVICE="$GREEN_SERVICE"
-            IDLE_TG="$GREEN_TG"
-          else
-            ACTIVE_SERVICE="$GREEN_SERVICE"
-            IDLE_SERVICE="$BLUE_SERVICE"
-            IDLE_TG="$BLUE_TG"
-          fi
-
-          echo "🔹 Active service: $ACTIVE_SERVICE"
-          echo "🔹 Idle service: $IDLE_SERVICE"
-
-          echo "Scaling down ECS service ($ACTIVE_SERVICE)..."
-
+          echo "Scaling down old active service: $ACTIVE_SERVICE"
           aws ecs update-service \
             --cluster "$CLUSTER_NAME" \
             --service "$ACTIVE_SERVICE" \
             --desired-count 0
 
-          echo "✅ $ACTIVE_SERVICE scaled down to 0 — Blue/Green cleanup complete."
+          echo "✅ $ACTIVE_SERVICE scaled down successfully."
