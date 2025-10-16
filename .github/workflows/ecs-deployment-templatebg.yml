@@ -297,19 +297,21 @@ jobs:
           fi
 
       # 6️⃣ Wait for ECS service to stabilize
-      - name: Wait for idle color ECS service
+      - name: Wait for ECS service to stabilize
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
 
-          # Check service status
+          # Get service status, fallback to EMPTY string if not found
           SERVICE_STATUS=$(aws ecs describe-services \
               --cluster "$CLUSTER_NAME" \
               --services "$SERVICE_NAME" \
               --query 'services[0].status' \
-              --output text || echo "NONE")
+              --output text || echo "")
 
-          if [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
+          if [[ -z "$SERVICE_STATUS" ]] || [[ "$SERVICE_STATUS" == "INACTIVE" ]]; then
+              echo "First-time deployment detected or service not active yet. Proceeding..."
+          elif [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
               echo "⏳ Waiting for ECS service to stabilize..."
               aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
               echo "✅ ECS service is stable"
@@ -318,7 +320,7 @@ jobs:
               aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
               echo "✅ ECS service drained"
           else
-              echo "Service is $SERVICE_STATUS. Skipping wait."
+              echo "Service status: $SERVICE_STATUS. Proceeding without wait."
           fi
 
       # 7️⃣ Check Target Group Health
