@@ -65,9 +65,6 @@ on:
         required: false
         type: string
         default: "8081"
-      manual-flip:
-        type: boolean
-        default: false
 
     outputs:
       LIVE_SERVICE:
@@ -230,7 +227,7 @@ jobs:
           echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
-          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE"
+          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , First Time Deployment: $IS_FIRST_DEPLOY"
 
       # 5️⃣ Deploy ECS service to idle color
       - name: Deploy to Idle ECS Service ECS

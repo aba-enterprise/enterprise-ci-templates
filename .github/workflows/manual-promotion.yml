@@ -54,16 +54,17 @@ jobs:
           aws-region: us-east-2
           audience: sts.amazonaws.com
 
-      # - name: Get idle color from previous Job
-      #   run: |
-      #     # echo "ACTIVE_COLOR=${{ inputs.active-service }}"
-      #     echo "IDLE_COLOR=${{ inputs.idle-tg }}"
-      #     echo "IDLE_COLOR=${{ inputs.idle-service }}"
-      #     echo "IDLE_TG=${{ inputs.idle-tg}}"
+      - name: Get idle color from previous Job
+        run: |
+          # echo "ACTIVE_COLOR=${{ inputs.active-service }}"
+          echo "IDLE_COLOR=${{ inputs.idle-tg }}"
+          echo "IDLE_COLOR=${{ inputs.idle-service }}"
+          echo "IDLE_TG=${{ inputs.idle-tg}}"
+          echo "FirstTimneDeployment=${{ inputs.is-first-deploy}}"
 
       # 2️⃣ Flip Traffic to New Version
       - name: Flip Traffic to New Version
-        if: ${{ inputs.is-first-deploy == false }}
+        if: ${{ inputs.is-first-deploy == 'false' }}  # Skip first deployment
         run: |
           echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
           aws elbv2 modify-listener \
