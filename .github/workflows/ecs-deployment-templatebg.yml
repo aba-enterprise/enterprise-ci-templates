@@ -302,26 +302,42 @@ jobs:
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-colors.outputs.IDLE_COLOR }}"
 
-          # Get service status, fallback to EMPTY string if not found
-          SERVICE_STATUS=$(aws ecs describe-services \
-              --cluster "$CLUSTER_NAME" \
-              --services "$SERVICE_NAME" \
-              --query 'services[0].status' \
-              --output text || echo "")
+          echo "Waiting for ECS service '$SERVICE_NAME' to become active..."
+          # Loop until service exists and is stable, or timeout
+          MAX_RETRIES=30
+          SLEEP_INTERVAL=20
+          RETRY=0
+          while true; do
+              SERVICE_STATUS=$(aws ecs describe-services \
+                  --cluster "$CLUSTER_NAME" \
+                  --services "$SERVICE_NAME" \
+                  --query 'services[0].status' \
+                  --output text 2>/dev/null || echo "NONE")
 
-          if [[ -z "$SERVICE_STATUS" ]] || [[ "$SERVICE_STATUS" == "INACTIVE" ]]; then
-              echo "First-time deployment detected or service not active yet. Proceeding..."
-          elif [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
-              echo "⏳ Waiting for ECS service to stabilize..."
-              aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
-              echo "✅ ECS service is stable"
-          elif [[ "$SERVICE_STATUS" == "DRAINING" ]]; then
-              echo "Service is draining. ⏳ Waiting for cleanup..."
-              aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
-              echo "✅ ECS service drained"
-          else
-              echo "Service status: $SERVICE_STATUS. Proceeding without wait."
-          fi
+              if [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
+                  echo "⏳ Service is active. Waiting for stability..."
+                  aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+                  echo "✅ ECS service is stable"
+                  break
+              elif [[ "$SERVICE_STATUS" == "DRAINING" ]]; then
+                  echo "Service is draining. Waiting for cleanup..."
+                  aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+                  echo "✅ ECS service drained"
+                  break
+              elif [[ "$SERVICE_STATUS" == "NONE" || "$SERVICE_STATUS" == "INACTIVE" ]]; then
+                  echo "Service not active yet. Retrying in $SLEEP_INTERVAL seconds..."
+              else
+                  echo "Service status: $SERVICE_STATUS. Retrying in $SLEEP_INTERVAL seconds..."
+              fi
+
+              RETRY=$((RETRY+1))
+              if [[ $RETRY -ge $MAX_RETRIES ]]; then
+                  echo "⚠️ Timeout waiting for ECS service. Proceeding anyway..."
+                  break
+              fi
+
+              sleep $SLEEP_INTERVAL
+          done
 
       # 7️⃣ Check Target Group Health
       - name: Validate Target Group health
