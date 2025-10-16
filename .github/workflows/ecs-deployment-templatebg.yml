@@ -202,33 +202,77 @@ jobs:
       - name: Register ECS Task Definition
         run: aws ecs register-task-definition --cli-input-json file://task-def.json
 
-      # 4️⃣ Determine idle color
+      # 4️⃣ Determine idle color (handles first-time deployment safely)
       - name: Determine idle color
         id: set-colors
         run: |
+          set -euo pipefail
+
           ALB_ARN="${{ inputs.alb-arn }}"
           BLUE_TG="${{ inputs.blue-target-group }}"
           GREEN_TG="${{ inputs.green-target-group }}"
+          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
+          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
+          GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
 
+          echo "🔹 ALB: $ALB_ARN"
+          echo "🔹 Blue TG: $BLUE_TG"
+          echo "🔹 Green TG: $GREEN_TG"
+
+          # Get currently active target group from listener (if exists)
           ACTIVE_TG=$(aws elbv2 describe-listeners \
               --load-balancer-arn "$ALB_ARN" \
               --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
-              --output text)
+              --output text 2>/dev/null || echo "")
 
-          if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
+          echo "Detected ACTIVE_TG: $ACTIVE_TG"
+
+          # Check if blue or green ECS services actually exist
+          BLUE_EXISTS=$(aws ecs describe-services \
+              --cluster "$CLUSTER_NAME" \
+              --services "$BLUE_SERVICE" \
+              --query 'services[0].status' \
+              --output text 2>/dev/null || echo "NONE")
+
+          GREEN_EXISTS=$(aws ecs describe-services \
+              --cluster "$CLUSTER_NAME" \
+              --services "$GREEN_SERVICE" \
+              --query 'services[0].status' \
+              --output text 2>/dev/null || echo "NONE")
+
+          echo "Blue service status: $BLUE_EXISTS"
+          echo "Green service status: $GREEN_EXISTS"
+
+          # Determine colors based on first-time deployment or active TG
+          if [[ "$BLUE_EXISTS" == "NONE" && "$GREEN_EXISTS" == "NONE" ]]; then
+              echo "🆕 No ECS services found — first-time deployment. Using BLUE as idle target."
+              ACTIVE_COLOR="none"
+              IDLE_COLOR="blue"
+              IDLE_TG="$BLUE_TG"
+
+          elif [ "$ACTIVE_TG" = "$BLUE_TG" ]; then
               ACTIVE_COLOR="blue"
               IDLE_COLOR="green"
               IDLE_TG="$GREEN_TG"
-          else
+
+          elif [ "$ACTIVE_TG" = "$GREEN_TG" ]; then
               ACTIVE_COLOR="green"
+              IDLE_COLOR="blue"
+              IDLE_TG="$BLUE_TG"
+
+          else
+              echo "⚠️ No matching active target group found, defaulting to BLUE as idle."
+              ACTIVE_COLOR="none"
               IDLE_COLOR="blue"
               IDLE_TG="$BLUE_TG"
           fi
 
+          echo "Active color: $ACTIVE_COLOR, Idle color: $IDLE_COLOR"
           echo "ACTIVE_COLOR=$ACTIVE_COLOR" >> $GITHUB_OUTPUT
           echo "IDLE_COLOR=$IDLE_COLOR" >> $GITHUB_OUTPUT
           echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
-          echo "Active color: $ACTIVE_COLOR, Idle color: $IDLE_COLOR"
+
 
       # 5️⃣ Deploy ECS service to idle color
       - name: Deploy to idle color ECS service
