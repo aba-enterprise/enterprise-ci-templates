@@ -64,7 +64,7 @@ jobs:
 
       # 2️⃣ Flip Traffic to New Version
       - name: Flip Traffic to New Version
-        if: ${{ inputs.is-first-deploy == 'false' }}  # Skip first deployment
+        if: ${{ inputs.is-first-deploy == false }}  # Skip first deployment
         run: |
           echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
           aws elbv2 modify-listener \
@@ -82,7 +82,7 @@ jobs:
 
       # 4️⃣ Scale down old ECS service
       - name: Scale Down Old Active Service
-        if: ${{ inputs.is-first-deploy == 'false' }}  # Skip first deployment
+        if: ${{ inputs.is-first-deploy == false }}  # Skip first deployment
         run: |
           set -e
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
