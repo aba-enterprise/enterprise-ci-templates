@@ -204,6 +204,7 @@ jobs:
             echo "LIVE_SERVICE=none" >> $GITHUB_OUTPUT
             echo "IDLE_SERVICE=blue" >> $GITHUB_OUTPUT
             echo "IDLE_TG=$BLUE_TG" >> $GITHUB_OUTPUT
+            echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
             exit 0
           fi
 
