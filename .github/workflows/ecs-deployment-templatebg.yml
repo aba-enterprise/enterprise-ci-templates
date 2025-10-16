@@ -11,10 +11,10 @@ on:
         description: "Task Definition Family"
         required: false
         type: string
-      # container-name:
-      #   description: "Container Name"
-      #   required: false
-      #   type: string
+      container-name:
+        description: "Container Name"
+        required: false
+        type: string
       desired-count:
         description: "Number of tasks"
         required: false
