@@ -42,7 +42,7 @@ jobs:
     environment:
       name: ${{ inputs.environment }}
     env:
-      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECRPushRole
+      AWS_ROLE_ARN: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole #GitHubActionsECRPushRole
 
     permissions:
       id-token: write
