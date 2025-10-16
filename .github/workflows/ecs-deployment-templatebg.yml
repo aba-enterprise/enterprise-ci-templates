@@ -1,14 +1,14 @@
-name: Reusable ECS Task + Service Deployment (Blue-Green)
+name: Reusable ECS Deployment (Blue-Green)
 
 on:
   workflow_call:
     inputs:
       service-name:
-        description: "ECS Service Name"
+        description: "ECS Service Base Name"
         required: false
         type: string
       task-family:
-        description: "Task Definition Family"
+        description: "ECS Task Definition Family"
         required: false
         type: string
       container-name:
@@ -16,20 +16,15 @@ on:
         required: false
         type: string
       desired-count:
-        description: "Number of tasks"
-        required: false
-        type: string
+        description: "Number of ECS tasks"
         default: "1"
+        type: string
       cpu:
-        description: "Task CPU Units"
-        required: false
-        type: string
         default: "256"
-      memory:
-        description: "Task Memory (MiB)"
-        required: false
         type: string
+      memory:
         default: "512"
+        type: string
       image-tag:
         description: "ECR image tag (commit SHA or latest)"
         required: false
@@ -45,19 +40,15 @@ on:
         type: string
       extra-env:
         description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
-        required: false
         type: string
         default: '[]'
       blue-target-group:
-        description: "Blue Target Group ARN"
         required: true
         type: string
       green-target-group:
-        description: "Green Target Group ARN"
         required: true
         type: string
       alb-arn:
-        description: "Application Load Balancer ARN"
         required: true
         type: string
       main-listener-arn:
@@ -70,45 +61,36 @@ on:
         type: boolean
         default: true
       temp-listener-port:
-        description: "Port for temporary listener (testing idle color)"
+        description: "Port for temporary listener for testing new version of code"
         required: false
         type: string
         default: "8081"
       manual-flip:
-        description: "Automatically flip traffic to new version after testing"
-        required: false
         type: boolean
         default: false
-    # 👇 This will be use in next Jobs
+
     outputs:
       ACTIVE_COLOR:
-        description: "The active color after deployment"
         value: ${{ jobs.ecs-deploy.outputs.ACTIVE_COLOR }}
       IDLE_COLOR:
-        description: "The idle color after deployment"
         value: ${{ jobs.ecs-deploy.outputs.IDLE_COLOR }}
       IDLE_TG:
-        description: "The idle target group ARN"
         value: ${{ jobs.ecs-deploy.outputs.IDLE_TG }}
       TEMP_LISTENER_ARN:
-        description: "Temporary listener ARN"
         value: ${{ jobs.ecs-deploy.outputs.TEMP_LISTENER_ARN }}
 
 jobs:
   ecs-deploy:
     runs-on: ubuntu-latest
-    # environment:
-    #   name: ${{ inputs.environment }}
-    environment: ${{ inputs.environment == 'dev' && 'dev' || '' }} # only prod requires approval
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       ACTIVE_COLOR: ${{ steps.set-colors.outputs.ACTIVE_COLOR }}
       IDLE_COLOR: ${{ steps.set-colors.outputs.IDLE_COLOR }}
       IDLE_TG: ${{ steps.set-colors.outputs.IDLE_TG }}
       TEMP_LISTENER_ARN: ${{ steps.temp_listener.outputs.TEMP_LISTENER_ARN }}
-
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       # 1️⃣ Configure AWS credentials
@@ -117,23 +99,19 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
-          audience: sts.amazonaws.com
 
       # 2️⃣ Generate ECS Task Definition
       - name: Generate ECS Task Definition
-        id: generate-taskdef
+        id: gen-task
         run: |
           set -euo pipefail
-
           REPO_NAME=$(basename $GITHUB_REPOSITORY)
           SHORT_SHA=${GITHUB_SHA::7}
           IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
-
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
           EXTRA_ENV="${{ inputs.extra-env }}"
-
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$REPO_NAME}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
