@@ -223,11 +223,13 @@ jobs:
               IDLE_TG="$BLUE_TG"
           fi
 
-          echo "IS_FIRST_DEPLOY=false" >> $GITHUB_OUTPUT
+          IS_FIRST_DEPLOY=false
+
+          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
           echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
-          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , First Time Deployment: $IS_FIRST_DEPLOY"
+          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
 
       # 5️⃣ Deploy ECS service to idle color
       - name: Deploy to Idle ECS Service ECS
