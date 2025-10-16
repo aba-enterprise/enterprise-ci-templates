@@ -232,7 +232,7 @@ jobs:
           echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
 
       # 5️⃣ Deploy ECS service to idle color
-      - name: Deploy to Idle ECS Service ECS
+      - name: Deploy Idle ECS Service
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
