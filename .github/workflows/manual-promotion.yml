@@ -53,42 +53,6 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
           audience: sts.amazonaws.com
-        
-      # # 1️⃣ Determine idle color
-      # - name: Determine active and idle color
-      #   id: set-colors
-      #   run: |
-      #    BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-
-      #       # Construct ECS service names dynamically
-      #       BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
-      #       GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
-
-      #       echo "Blue Service: $BLUE_SERVICE"
-      #       echo "Green Service: $GREEN_SERVICE"
-          
-      #       ACTIVE_TG=$(aws elbv2 describe-listeners \
-      #       --listener-arns "${{ inputs.main-listener-arn }}" \
-      #       --query "Listeners[0].DefaultActions[0].TargetGroupArn" \
-      #       --output text)
-
-      #     if [ "$ACTIVE_TG" = "${{ inputs.blue-tg-arn }}" ]; then
-      #         ACTIVE_COLOR="blue"
-      #         IDLE_COLOR="green"
-      #         IDLE_TG="${{ inputs.green-tg-arn }}"
-      #         OLD_SERVICE="$BLUE_SERVICE"
-      #     else
-      #         ACTIVE_COLOR="green"
-      #         IDLE_COLOR="blue"
-      #         IDLE_TG="${{ inputs.blue-tg-arn }}"
-      #         OLD_SERVICE="$GREEN_SERVICE"
-      #     fi
-
-      #     echo "ACTIVE_COLOR=$ACTIVE_COLOR" >> $GITHUB_ENV
-      #     echo "IDLE_COLOR=$IDLE_COLOR" >> $GITHUB_ENV
-      #     echo "IDLE_TG=$IDLE_TG" >> $GITHUB_ENV
-      #     echo "OLD_SERVICE=$OLD_SERVICE" >> $GITHUB_ENV
-      #     echo "Active color: $ACTIVE_COLOR, Idle color: $IDLE_COLOR"
 
       - name: Get idle color from previous Job
         run: |
@@ -98,6 +62,7 @@ jobs:
 
       # 2️⃣ Manual flip traffic
       - name: Flip Traffic to New Version
+        if: ${{ inputs.idle-tg != '' }}  # Skip first deployment
         run: |
           IDLE_TG=${{ inputs.idle-tg}}
           IDLE_COLOR=${{ inputs.idel-color }}
@@ -118,18 +83,17 @@ jobs:
 
       # 4️⃣ Scale down old ECS service
       - name: Scale down old service
+        if: ${{ inputs.active-tg != '' }}  # Only run if theres an active service
         run: |
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           BLUE_SERVICE="${BASE_SERVICE_NAME}-blue"
           GREEN_SERVICE="${BASE_SERVICE_NAME}-green"
 
-          # Get inputs passed from caller workflow
           ACTIVE_TG="${{ inputs.active-tg }}"
           BLUE_TG="${{ inputs.blue-tg-arn }}"
           GREEN_TG="${{ inputs.green-tg-arn }}"
 
-          # Determine active/idle color and old service
           if [ "$ACTIVE_TG" = "$BLUE_TG" ]; then
               ACTIVE_COLOR="blue"
               IDLE_COLOR="green"
