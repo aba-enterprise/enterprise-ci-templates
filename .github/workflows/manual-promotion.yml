@@ -64,6 +64,7 @@ jobs:
           echo "IDLE_TG=${{ inputs.idle-tg }}"
           echo "IDLE_SERVICE=${{ inputs.idle-service }}"
           echo "FirstTimneDeployment=${{ inputs.is-first-deploy}}"
+          echo "TemporaryListener=${{ inputs.temp-listener-arn}}"
 
       # 2️⃣ Flip Traffic to New Version
       - name: Flip Traffic to New Version
@@ -77,7 +78,7 @@ jobs:
 
       # 3️⃣ Remove temporary listener if exists
       - name: Remove Temporary Listener
-        if: ${{ inputs.temp-listener-arn }}
+        if: ${{ inputs.temp-listener-arn == 'false' }}
         run: |
           echo "Removing temporary listener: ${{ inputs.temp-listener-arn }}"
           aws elbv2 delete-listener --listener-arn "${{ inputs.temp-listener-arn }}"
