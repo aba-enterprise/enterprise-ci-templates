@@ -357,7 +357,7 @@ jobs:
       # 8️⃣ Application Endpoint Test (Dynamic)
       - name: Application Endpoint Test
         id: app_endpoint_test
-        if: ${{ inputs.use-temp-listener == 'true' }}
+        if: ${{ inputs.use-temp-listener }}
         run: |
           ALB_ARN=${{ inputs.alb-arn }}
           TEMP_PORT=${{ inputs.temp-listener-port }}
