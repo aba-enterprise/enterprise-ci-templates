@@ -339,12 +339,38 @@ jobs:
               sleep $SLEEP_INTERVAL
           done
 
-      # 7️⃣ Check Target Group Health
-      - name: Validate Target Group health
+      # # 7️⃣ Check Target Group Health
+      # - name: Validate Target Group health
+      #   run: |
+      #     IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+      #     echo "Checking target health for idle color TG: $IDLE_TG"
+      #     aws elbv2 describe-target-health --target-group-arn $IDLE_TG
+      
+      # 3️⃣ Validate Idle Target Group Health (Log-friendly)
+      - name: Validate Idle Target Group Health
+        id: check-health
         run: |
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
-          echo "Checking target health for idle color TG: $IDLE_TG"
-          aws elbv2 describe-target-health --target-group-arn $IDLE_TG
+          echo "Checking target health for idle TG: $IDLE_TG..."
+
+          # Get target health info
+          TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
+            --query 'TargetHealthDescriptions[*].{Id:Target.Id,Port:Target.Port,State:TargetHealth.State}' \
+            --output json)
+
+          echo "Target Health:"
+          echo "$TARGETS" | jq -r '.[] | "🔹 \(.Id):\(.Port) → \(.State)"'
+
+          # Count healthy targets
+          HEALTHY_COUNT=$(echo "$TARGETS" | jq '[.[] | select(.State=="healthy")] | length')
+          echo "✅ Healthy targets count: $HEALTHY_COUNT"
+
+          if [ "$HEALTHY_COUNT" -eq 0 ]; then
+            echo "❌ No healthy targets available. Deployment cannot continue."
+            exit 1
+          fi
+
+          echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
 
       # 8️⃣ Temporary Listener Test (Optional)
       - name: Temporary Listener Test
