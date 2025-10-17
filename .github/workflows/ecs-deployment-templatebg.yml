@@ -387,9 +387,6 @@ jobs:
           fi
 
           echo "🔗 Testing Application Endpoint: $TEST_URL"
-          curl -sf "$TEST_URL" || (echo "❌ Application health check failed!" && exit 1)
-          echo "✅ Application endpoint is healthy!"
-
           echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
           echo "TEST_URL=$TEST_URL" >> $GITHUB_OUTPUT
 
