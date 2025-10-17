@@ -371,48 +371,27 @@ jobs:
           fi
 
           echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
-      # 3️⃣ Validate Target Group Health with Container Port
-      - name: Validate Target Group Health with Container Port
-        run: |
-          set -e
-
-          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
-          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-          echo "Checking target health for idle TG: $IDLE_TG"
-
-          # Get target health
-          TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
-            --query 'TargetHealthDescriptions[*].Target' --output json)
-
-          # Initialize healthy count
-          HEALTHY_COUNT=0
-
-          for row in $(echo "$TARGETS" | jq -c '.[]'); do
-            TARGET_ID=$(echo "$row" | jq -r '.Id')
-            TG_PORT=$(echo "$row" | jq -r '.Port')
-
-            # Get ECS task for this IP
-            TASK_ARN=$(aws ecs list-tasks --cluster "$CLUSTER_NAME" --query "taskArns[]" --output text)
-            CONTAINER_PORT=$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks $TASK_ARN \
-              --query "tasks[].containers[?networkInterfaces[0].privateIpv4Address=='$TARGET_ID'].networkBindings[0].containerPort" \
-              --output text)
-
-            # Get health state
-            HEALTH_STATE=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
-              --targets Id="$TARGET_ID",Port="$TG_PORT" \
-              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text)
-
-            echo "🔹 $TARGET_ID:$CONTAINER_PORT → $HEALTH_STATE"
-
-            if [ "$HEALTH_STATE" = "healthy" ]; then
-              HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
-            fi
-          done
-
-          echo "✅ Healthy targets count: $HEALTHY_COUNT"
-
 
       # 8️⃣ Temporary Listener Test (Optional)
+      # - name: Temporary Listener Test
+      #   if: ${{ inputs.use-temp-listener }}
+      #   id: temp_listener
+      #   run: |
+      #     IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+      #     TEMP_PORT=${{ inputs.temp-listener-port }}
+      #     ALB_ARN=${{ inputs.alb-arn }}
+
+      #     # Create temporary listener
+      #     TEMP_LISTENER_ARN=$(aws elbv2 create-listener \
+      #       --load-balancer-arn $ALB_ARN \
+      #       --protocol HTTP \
+      #       --port $TEMP_PORT \
+      #       --default-actions Type=forward,TargetGroupArn=$IDLE_TG \
+      #       --query 'Listeners[0].ListenerArn' --output text)
+          
+      #       echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
+
+      #     echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
       - name: Temporary Listener Test
         if: ${{ inputs.use-temp-listener }}
         id: temp_listener
@@ -421,17 +400,29 @@ jobs:
           TEMP_PORT=${{ inputs.temp-listener-port }}
           ALB_ARN=${{ inputs.alb-arn }}
 
+          echo "Creating temporary listener on port $TEMP_PORT for validation..."
+
           # Create temporary listener
           TEMP_LISTENER_ARN=$(aws elbv2 create-listener \
-            --load-balancer-arn $ALB_ARN \
+            --load-balancer-arn "$ALB_ARN" \
             --protocol HTTP \
-            --port $TEMP_PORT \
-            --default-actions Type=forward,TargetGroupArn=$IDLE_TG \
+            --port "$TEMP_PORT" \
+            --default-actions Type=forward,TargetGroupArn="$IDLE_TG" \
             --query 'Listeners[0].ListenerArn' --output text)
-          
-            echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
 
-          echo "✅ Temporary listener created. Test at http://<ALB_DNS>:$TEMP_PORT"
+          # Get ALB DNS name
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --load-balancer-arns "$ALB_ARN" \
+            --query 'LoadBalancers[0].DNSName' --output text)
+
+          # Construct full test URL
+          TEST_URL="http://${ALB_DNS}:${TEMP_PORT}/health"
+
+          echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
+          echo "TEST_URL=$TEST_URL" >> $GITHUB_OUTPUT
+
+          echo "✅ Temporary listener created. Validate your new version at: $TEST_URL"
+
 
       #  🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
       - name: Cleanup old ECS Task Definitions
