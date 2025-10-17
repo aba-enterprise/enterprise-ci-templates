@@ -89,7 +89,8 @@ jobs:
         run: |
           set -e
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-          OLD_SERVICE="${{ inputs.live-service }}"
+          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          OLD_SERVICE="${BASE_SERVICE_NAME}-${{ inputs.live-service }}"
 
           echo "Scaling down old active ECS service: $OLD_SERVICE"
 
