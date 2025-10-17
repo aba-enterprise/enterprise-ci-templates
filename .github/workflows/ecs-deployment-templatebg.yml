@@ -371,6 +371,46 @@ jobs:
           fi
 
           echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
+      # 3️⃣ Validate Target Group Health with Container Port
+      - name: Validate Target Group Health with Container Port
+        run: |
+          set -e
+
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
+          echo "Checking target health for idle TG: $IDLE_TG"
+
+          # Get target health
+          TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
+            --query 'TargetHealthDescriptions[*].Target' --output json)
+
+          # Initialize healthy count
+          HEALTHY_COUNT=0
+
+          for row in $(echo "$TARGETS" | jq -c '.[]'); do
+            TARGET_ID=$(echo "$row" | jq -r '.Id')
+            TG_PORT=$(echo "$row" | jq -r '.Port')
+
+            # Get ECS task for this IP
+            TASK_ARN=$(aws ecs list-tasks --cluster "$CLUSTER_NAME" --query "taskArns[]" --output text)
+            CONTAINER_PORT=$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks $TASK_ARN \
+              --query "tasks[].containers[?networkInterfaces[0].privateIpv4Address=='$TARGET_ID'].networkBindings[0].containerPort" \
+              --output text)
+
+            # Get health state
+            HEALTH_STATE=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
+              --targets Id="$TARGET_ID",Port="$TG_PORT" \
+              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text)
+
+            echo "🔹 $TARGET_ID:$CONTAINER_PORT → $HEALTH_STATE"
+
+            if [ "$HEALTH_STATE" = "healthy" ]; then
+              HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
+            fi
+          done
+
+          echo "✅ Healthy targets count: $HEALTHY_COUNT"
+
 
       # 8️⃣ Temporary Listener Test (Optional)
       - name: Temporary Listener Test
