@@ -78,7 +78,7 @@ jobs:
 
       # 3️⃣ Remove temporary listener if exists
       - name: Remove Temporary Listener
-        if: ${{ inputs.temp-listener-arn == 'false' }}
+        if: ${{ inputs.is-first-deploy == false }}  # Skip first deployment
         run: |
           echo "Removing temporary listener: ${{ inputs.temp-listener-arn }}"
           aws elbv2 delete-listener --listener-arn "${{ inputs.temp-listener-arn }}"
