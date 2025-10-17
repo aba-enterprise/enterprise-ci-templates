@@ -354,9 +354,9 @@ jobs:
           fi
           echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
 
-      # 8️⃣ Temporary Listener Test
-      - name: Temporary Listener Test
-        id: temp_listener
+      # 8️⃣ Application Endpoint Test (Dynamic)
+      - name: Application Endpoint Test
+        id: app_endpoint_test
         if: ${{ inputs.use-temp-listener == 'true' }}
         run: |
           ALB_ARN=${{ inputs.alb-arn }}
@@ -370,7 +370,7 @@ jobs:
             --query 'LoadBalancers[0].DNSName' --output text)
 
           if [[ "$IS_FIRST_DEPLOY" == "true" ]]; then
-            echo "🟢 First deployment detected — skipping temporary listener creation."
+            echo "🟢 First deployment detected — testing main endpoint only."
             TEST_URL="http://${ALB_DNS}/health"
             TEMP_LISTENER_ARN="none"
           else
@@ -386,7 +386,10 @@ jobs:
             echo "✅ Temporary listener created on port $TEMP_PORT"
           fi
 
-          echo "🔗 Health check URL: $TEST_URL"
+          echo "🔗 Testing Application Endpoint: $TEST_URL"
+          curl -sf "$TEST_URL" || (echo "❌ Application health check failed!" && exit 1)
+          echo "✅ Application endpoint is healthy!"
+
           echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
           echo "TEST_URL=$TEST_URL" >> $GITHUB_OUTPUT
 
