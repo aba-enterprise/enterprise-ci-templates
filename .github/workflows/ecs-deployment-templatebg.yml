@@ -354,8 +354,8 @@ jobs:
           fi
           echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
 
-      # 8️⃣ Application Endpoint Test (Dynamic)
-      - name: Application Endpoint Test
+      # 8️⃣ Application Endpoint URL (Dynamic)
+      - name: Application Endpoint URL
         id: app_endpoint_test
         if: ${{ inputs.use-temp-listener }}
         run: |
