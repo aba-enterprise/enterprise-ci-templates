@@ -188,27 +188,26 @@ jobs:
           BLUE_TG="${{ inputs.blue-target-group }}"
           GREEN_TG="${{ inputs.green-target-group }}"
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-
-          # Dynamically get base service name (either input or repo name)
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           echo "Detected base service name: $BASE_SERVICE_NAME"
 
-          # Check if ECS service exists for this app (either blue or green)
           EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
             --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
             --output text)
 
           if [ -z "$EXISTING_SERVICES" ]; then
             echo "🟢 First-time deployment detected (no ECS service found)."
-            echo "IS_FIRST_DEPLOY=true" >> $GITHUB_OUTPUT
-            echo "LIVE_SERVICE=none" >> $GITHUB_OUTPUT
-            echo "IDLE_SERVICE=blue" >> $GITHUB_OUTPUT
+            IS_FIRST_DEPLOY=true
+            LIVE_SERVICE="none"
+            IDLE_SERVICE="blue"
+            echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
+            echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
+            echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
             echo "IDLE_TG=$BLUE_TG" >> $GITHUB_OUTPUT
             echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
             exit 0
           fi
 
-          # Determine current active/idle color from ALB listener
           ACTIVE_TG=$(aws elbv2 describe-listeners \
               --load-balancer-arn "$ALB_ARN" \
               --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
@@ -225,7 +224,6 @@ jobs:
           fi
 
           IS_FIRST_DEPLOY=false
-
           echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
           echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
@@ -233,7 +231,7 @@ jobs:
           echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
 
       # 5️⃣ Deploy ECS service to idle color
-      - name: Deploy Idle ECS Service
+      - name: Deploy Idle ECS Service (Blue/Green)
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           DESIRED_COUNT=${{ inputs.desired-count }}
