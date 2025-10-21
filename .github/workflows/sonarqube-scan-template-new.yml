@@ -1,0 +1,132 @@
+name: SonarQube Analysis (.NET Core - Enterprise)
+
+on:
+  workflow_call:
+    inputs:
+      projectKey:
+        required: true
+        type: string
+      projectSlnPath:
+        required: true
+        type: string
+      testProjectPath:
+        required: true
+        type: string
+      organizationKey:
+        required: true
+        type: string
+      run-sonarqube-gate-check:
+        description: "Run SonarQube gate check? (yes/no)"
+        type: string
+        required: false
+        default: "yes"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup .NET SDK
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+
+      # 3️⃣ Cache dependencies for performance
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # 4️⃣ Restore tools via local tool manifest
+      - name: Restore Local Tools
+        run: dotnet tool restore
+
+      # 5️⃣ Validate SonarQube host and token
+      - name: Validate SonarQube Host
+        run: |
+          if [[ ! "${{ secrets.SONAR_HOST_URL }}" =~ ^https:// ]]; then
+            echo "❌ SONAR_HOST_URL must use HTTPS"
+            exit 1
+          fi
+
+      # 6️⃣ Begin SonarScanner
+      - name: Begin SonarScanner
+        run: |
+          dotnet sonarscanner begin \
+            /k:"${{ inputs.projectKey }}" \
+            /o:"${{ inputs.organizationKey }}" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="./coverage/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.json,**/*.config,**/*.md,**/*.yml,**/Dockerfile" \
+            /d:sonar.test.exclusions="**/bin/**,**/obj/**"
+
+      # 7️⃣ Build solution
+      - name: Build Solution
+        run: dotnet build ./${{ inputs.projectSlnPath }} --configuration Release
+
+      # 8️⃣ Run tests with coverage
+      - name: Run Tests with Coverage
+        run: |
+          mkdir -p ./coverage
+          dotnet test ./${{ inputs.testProjectPath }} \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      # 9️⃣ End SonarScanner
+      - name: End SonarScanner
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+      # 🔟 Generate coverage summary
+      - name: Generate Coverage Summary
+        run: |
+          COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
+          if [ -f "$COVERAGE_FILE" ]; then
+            dotnet tool run reportgenerator \
+              -reports:$COVERAGE_FILE \
+              -targetdir:coverage-summary \
+              -reporttypes:TextSummary
+            echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No coverage report found." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 1️⃣1️⃣ Check SonarQube Quality Gate (with retry)
+      - name: Check SonarQube Quality Gate
+        if: ${{ inputs.run-sonarqube-gate-check == 'yes' }}
+        run: |
+          RETRIES=5
+          DELAY=15
+          for ((i=1; i<=RETRIES; i++)); do
+            STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
+              | jq -r '.projectStatus.status')
+
+            if [ "$STATUS" = "OK" ]; then
+              echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            elif [ "$STATUS" = "ERROR" ]; then
+              echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            else
+              echo "⏳ Quality Gate check pending (attempt $i/$RETRIES)..."
+              sleep $DELAY
+            fi
+          done
+          echo "⚠️ Quality Gate check timed out after $RETRIES attempts." >> $GITHUB_STEP_SUMMARY
