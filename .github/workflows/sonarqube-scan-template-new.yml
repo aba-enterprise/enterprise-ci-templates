@@ -109,26 +109,33 @@ jobs:
             echo "⚠️ No coverage report found." >> $GITHUB_STEP_SUMMARY
           fi
 
-      # 1️⃣1️⃣ Check SonarQube Quality Gate (with retry)
+      # 1️⃣1️⃣ Check SonarQube Quality Gate (with retry and bypass)
       - name: Check SonarQube Quality Gate
-        if: ${{ inputs.run-sonarqube-gate-check == 'yes' }}
         run: |
-          RETRIES=5
-          DELAY=15
-          for ((i=1; i<=RETRIES; i++)); do
-            STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
-              "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
-              | jq -r '.projectStatus.status')
+          if [[ "${{ inputs.run-sonarqube-gate-check }}" == "yes" ]]; then
+            RETRIES=5
+            DELAY=15
+            for ((i=1; i<=RETRIES; i++)); do
+              STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+                "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ inputs.projectKey }}" \
+                | jq -r '.projectStatus.status')
 
-            if [ "$STATUS" = "OK" ]; then
-              echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
-              exit 0
-            elif [ "$STATUS" = "ERROR" ]; then
-              echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
-              exit 1
-            else
-              echo "⏳ Quality Gate check pending (attempt $i/$RETRIES)..."
-              sleep $DELAY
-            fi
-          done
-          echo "⚠️ Quality Gate check timed out after $RETRIES attempts." >> $GITHUB_STEP_SUMMARY
+              echo "Quality Gate status: $STATUS"
+
+              if [ "$STATUS" = "OK" ]; then
+                echo "✅ Quality Gate passed: $STATUS" >> $GITHUB_STEP_SUMMARY
+                exit 0
+              elif [ "$STATUS" = "ERROR" ]; then
+                echo "❌ Quality Gate failed: $STATUS" >> $GITHUB_STEP_SUMMARY
+                exit 1
+              else
+                echo "⏳ Quality Gate check pending (attempt $i/$RETRIES)..."
+                sleep $DELAY
+              fi
+            done
+
+            echo "⚠️ Quality Gate check timed out after $RETRIES attempts." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Gate check bypassed (run-sonarqube-gate-check=no)" >> $GITHUB_STEP_SUMMARY
+          fi
+
