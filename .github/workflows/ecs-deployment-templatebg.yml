@@ -190,8 +190,6 @@ jobs:
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           echo "Detected base service name: $BASE_SERVICE_NAME"
-          echo "Detected base service name: $ALB_ARN"
-          echo "Detected base service name: $CLUSTER_NAME"
 
           EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
             --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
@@ -252,7 +250,7 @@ jobs:
           if [ "$BLUE_EXISTS" != "ACTIVE" ] && [ "$GREEN_EXISTS" != "ACTIVE" ]; then
               echo "First deployment — creating Blue service"
               SERVICE_NAME="$BLUE_SERVICE"
-              IDLE_TG="${{ inputs.blue-target-group }}"
+              IDLE_TG="${{ vars.BLUE_TG_ARN }}"
           else
               # Use the existing set-services logic for idle color
               SERVICE_NAME="${BASE_SERVICE_NAME}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
