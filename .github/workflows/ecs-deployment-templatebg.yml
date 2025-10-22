@@ -100,7 +100,55 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
 
-      # 2️⃣ Generate ECS Task Definition
+      # 2️⃣ Determine idle color (handles first-time deployment safely)
+      - name: Determine Idle Service (Blue/Green)
+        id: set-services
+        run: |
+          ALB_ARN="${{ vars.ALB_ARN }}"
+          BLUE_TG="${{ vars.BLUE_TG_ARN }}"
+          GREEN_TG="${{ vars.GREEN_TG_ARN }}"
+          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
+          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          echo "Detected base service name: $BASE_SERVICE_NAME"
+
+          EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
+            --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
+            --output text)
+
+          if [ -z "$EXISTING_SERVICES" ]; then
+            echo "🟢 First-time deployment detected (no ECS service found)."
+            IS_FIRST_DEPLOY=true
+            LIVE_SERVICE="blue"
+            IDLE_SERVICE="blue"
+            echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
+            echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
+            echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
+            echo "IDLE_TG=$BLUE_TG" >> $GITHUB_OUTPUT
+            echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
+            exit 0
+          fi
+          ACTIVE_TG=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "$ALB_ARN" \
+              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+              --output text)
+
+          if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
+              LIVE_SERVICE="blue"
+              IDLE_SERVICE="green"
+              IDLE_TG="$GREEN_TG"
+          else
+              LIVE_SERVICE="green"
+              IDLE_SERVICE="blue"
+              IDLE_TG="$BLUE_TG"
+          fi
+          IS_FIRST_DEPLOY=false
+          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
+          echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
+          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
+
+      # 3️⃣ Generate ECS Task Definition
       - name: Generate ECS Task Definition
         id: gen-task
         run: |
@@ -129,7 +177,8 @@ jobs:
                 {"name":"DOTNET_SKIP_FIRST_TIME_EXPERIENCE","value":"true"},
                 {"name":"DOTNET_NOLOGO","value":"true"},
                 {"name":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT","value":"true"},
-                {"name":"ASPNETCORE_URLS","value":"http://+:8080"}
+                {"name":"ASPNETCORE_URLS","value":"http://+:8080"},
+                ("name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}")
               ]')
               ;;
             java)
@@ -176,57 +225,9 @@ jobs:
           }
           EOF
 
-      # 3️⃣ Register ECS Task Definition
+      # 4️⃣ Register ECS Task Definition
       - name: Register ECS Task Definition
         run: aws ecs register-task-definition --cli-input-json file://task-def.json
-
-      # 4️⃣ Determine idle color (handles first-time deployment safely)
-      - name: Determine Idle Service (Blue/Green)
-        id: set-services
-        run: |
-          ALB_ARN="${{ vars.ALB_ARN }}"
-          BLUE_TG="${{ vars.BLUE_TG_ARN }}"
-          GREEN_TG="${{ vars.GREEN_TG_ARN }}"
-          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-          echo "Detected base service name: $BASE_SERVICE_NAME"
-
-          EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
-            --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
-            --output text)
-
-          if [ -z "$EXISTING_SERVICES" ]; then
-            echo "🟢 First-time deployment detected (no ECS service found)."
-            IS_FIRST_DEPLOY=true
-            LIVE_SERVICE="none"
-            IDLE_SERVICE="blue"
-            echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
-            echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
-            echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
-            echo "IDLE_TG=$BLUE_TG" >> $GITHUB_OUTPUT
-            echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
-            exit 0
-          fi
-          ACTIVE_TG=$(aws elbv2 describe-listeners \
-              --load-balancer-arn "$ALB_ARN" \
-              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
-              --output text)
-
-          if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
-              LIVE_SERVICE="blue"
-              IDLE_SERVICE="green"
-              IDLE_TG="$GREEN_TG"
-          else
-              LIVE_SERVICE="green"
-              IDLE_SERVICE="blue"
-              IDLE_TG="$BLUE_TG"
-          fi
-          IS_FIRST_DEPLOY=false
-          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
-          echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
-          echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
-          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
-          echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
 
       # 5️⃣ Deploy ECS service to idle color
       - name: Deploy Idle ECS Service (Blue/Green)
