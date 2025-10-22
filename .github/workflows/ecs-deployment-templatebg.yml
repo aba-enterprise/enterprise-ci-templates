@@ -185,8 +185,8 @@ jobs:
         id: set-services
         run: |
           ALB_ARN="${{ vars.ALB_ARN }}"
-          BLUE_TG="${{ vars.BLUE_TG }}"
-          GREEN_TG="${{ vars.GREEN_TG }}"
+          BLUE_TG="${{ vars.BLUE_TG_ARN }}"
+          GREEN_TG="${{ vars.GREEN_TG_ARN }}"
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           echo "Detected base service name: $BASE_SERVICE_NAME"
