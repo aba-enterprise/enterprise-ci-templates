@@ -163,7 +163,6 @@ jobs:
           SERVICE_NAME="${INPUT_SERVICE_NAME:-$REPO_NAME}"
           TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
           CONTAINER_NAME="${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}"
-          LIVE_SERVICE_CHEK="${{ steps.set-services.outputs.IDLE_SERVICE }}"
 
           ENV_VARS=$(jq -n \
             --arg lang "$APP_LANGUAGE" \
@@ -179,7 +178,7 @@ jobs:
                 {"name":"DOTNET_NOLOGO","value":"true"},
                 {"name":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT","value":"true"},
                 {"name":"ASPNETCORE_URLS","value":"http://+:8080"},
-                ("name":"LIVE_SERVICE","value":"$LIVE_SERVICE_CHEK")
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
               ]')
               ;;
             java)
