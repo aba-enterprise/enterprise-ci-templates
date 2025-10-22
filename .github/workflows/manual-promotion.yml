@@ -72,7 +72,7 @@ jobs:
         run: |
           echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
           aws elbv2 modify-listener \
-            --listener-arn "${{ inputs.main-listener-arn }}" \
+            --listener-arn "${{ vars.MAIN_ALB_LISTENER_ARN }}" \
             --default-actions '[{"Type":"forward","TargetGroupArn":"'"${{ inputs.idle-tg }}"'"}]'
           echo "✅ Traffic successfully flipped to ${{ inputs.idle-service }}"
 
