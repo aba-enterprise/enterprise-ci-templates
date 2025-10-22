@@ -34,10 +34,10 @@ on:
         required: true
         type: string
         default: 'dev'
-      # app-language:
-      #   description: "Application app-language (csharp, java, node, python)"
-      #   required: false
-      #   type: string
+      app-language:
+        description: "Application app-language (csharp, java, node, python)"
+        required: true
+        type: string
       extra-env:
         description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
         type: string
