@@ -190,6 +190,8 @@ jobs:
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
           BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
           echo "Detected base service name: $BASE_SERVICE_NAME"
+          echo "Detected base service name: $ALB_ARN"
+          echo "Detected base service name: $CLUSTER_NAME"
 
           EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
             --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
