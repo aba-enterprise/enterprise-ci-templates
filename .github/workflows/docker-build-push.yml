@@ -35,6 +35,7 @@ on:
         description: "Optional Docker image tag (default: github.sha)"
         required: false
         type: string
+    
     outputs:
       IMAGE_TAG:
         value: ${{ jobs.docker-build.outputs.IMAGE_TAG }}
@@ -193,4 +194,15 @@ jobs:
 
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH"
+
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # ✅ Save and Upload Docker Image Tag for CD Workflow
+      - name: Save Docker Image Tag
+        run: echo "IMAGE_TAG=${{ steps.docker_build.outputs.IMAGE_TAG }}" > image-tag.env
+
+      - name: Upload Image Tag Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-tag
+          path: image-tag.env
