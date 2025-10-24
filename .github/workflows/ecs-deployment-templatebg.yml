@@ -27,7 +27,7 @@ on:
         type: string
       image-tag:
         description: "ECR image tag (commit SHA or latest)"
-        required: false
+        required: true
         type: string
       environment:
         description: "Deployment environment (dev, qa, prod)"
@@ -42,19 +42,6 @@ on:
         description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
         type: string
         default: '[]'
-      # blue-target-group:
-      #   required: false
-      #   type: string
-      # green-target-group:
-      #   required: false
-      #   type: string
-      # alb-arn:
-      #   required: false
-      #   type: string
-      # main-listener-arn:
-      #   description: "ALB Main Listener ARN (port 80/443)"
-      #   required: false
-      #   type: string
       use-temp-listener:
         description: "Enable temporary listener testing before flipping traffic"
         required: false
@@ -155,7 +142,8 @@ jobs:
           set -euo pipefail
           REPO_NAME=$(basename $GITHUB_REPOSITORY)
           SHORT_SHA=${GITHUB_SHA::7}
-          IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
+          # IMAGE_TAG="${INPUT_IMAGE_TAG:-${REPO_NAME}-${SHORT_SHA}}"
+          IMAGE_TAG="${{ inputs.image-tag }}"
           ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
