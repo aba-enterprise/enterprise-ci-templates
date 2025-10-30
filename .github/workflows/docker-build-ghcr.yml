@@ -163,9 +163,12 @@ jobs:
 
           echo "IMAGE_TAG=$IMAGE_TAG_FINAL" >> $GITHUB_OUTPUT
 
-      # 6️⃣ Upload Image Tag Artifact
-      - name: Upload Image Tag
+      # 6️⃣ Save and Upload Docker Image Tag for CD Workflow
+      - name: Save Docker Image Tag
+        run: echo "IMAGE_TAG=${{ steps.docker_build.outputs.IMAGE_TAG }}" > image-tag.env
+
+      - name: Upload Image Tag Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-tag
-          path: <(echo "IMAGE_TAG=${{ steps.docker_build.outputs.IMAGE_TAG }}")
+          path: image-tag.env
