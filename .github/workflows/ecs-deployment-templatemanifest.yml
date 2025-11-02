@@ -98,14 +98,14 @@ jobs:
             # Flatten relevant fields for easier access in next steps
             SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
             CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
-            REGION=$(yq -r ".environments.$ENV.service.aws.region" "$MANIFEST_FILE")
+            # REGION=$(yq -r ".environments.$ENV.service.aws.region" "$MANIFEST_FILE")
             TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
             TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
             CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
 
             echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
             echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-            echo "REGION=$REGION" >> $GITHUB_ENV
+            # echo "REGION=$REGION" >> $GITHUB_ENV
             echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
             echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
             echo "CPU=$CPU" >> $GITHUB_ENV
@@ -121,7 +121,7 @@ jobs:
         run: |
           echo "Cluster: $CLUSTER_NAME"
           echo "Service: $SERVICE_NAME"
-          echo "Region: $REGION"
+          # echo "Region: $REGION"
           echo "Blue TG: $TARGET_GROUP_BLUE"
           echo "Green TG: $TARGET_GROUP_GREEN"
 
@@ -174,7 +174,7 @@ jobs:
           DESIRED_COUNT="${DESIRED_COUNT:-${{ inputs.desired-count }}}"
           CPU="${CPU:-${{ inputs.cpu }}}"
           MEMORY="${MEMORY:-${{ inputs.memory }}}"
-          TASK_FAMILY="${SERVICE_NAME}-task}}"
+          TASK_FAMILY="${SERVICE_NAME}-task}"
           CONTAINER_NAME="${SERVICE_NAME}-container}}"
 
           ENV_VARS=$(jq -n \
