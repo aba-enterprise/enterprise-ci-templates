@@ -132,7 +132,7 @@ jobs:
         id: load-manifest
         run: |
           ENV="${{ inputs.environment }}"
-          MANIFEST_FILE="manifest\manifest-ecs.yml"
+          MANIFEST_FILE="manifest/manifest-ecs.yml"
 
           echo "Reading ECS manifest for environment: $ENV"
           if [ -f "$MANIFEST_FILE" ]; then
