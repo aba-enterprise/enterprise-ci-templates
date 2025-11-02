@@ -252,8 +252,8 @@ jobs:
       - name: Deploy Idle ECS Service
         run: |
           # CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
-          SERVICE_NAME="$SERVICE_NAME-${{ steps.set-services.outputs.IDLE_SERVICE }}"
           TASK_FAMILY="$SERVICE_NAME-task"
+          SERVICE_NAME="$SERVICE_NAME-${{ steps.set-services.outputs.IDLE_SERVICE }}"
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
           # DESIRED_COUNT=${{ inputs.desired-count }}
 
