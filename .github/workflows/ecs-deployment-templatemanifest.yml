@@ -101,6 +101,8 @@ jobs:
             # REGION=$(yq -r ".environments.$ENV.service.aws.region" "$MANIFEST_FILE")
             TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
             TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
+            ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
+            ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
             CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
 
             echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
@@ -108,6 +110,8 @@ jobs:
             # echo "REGION=$REGION" >> $GITHUB_ENV
             echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
             echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
+            echo "ALB_ARN=$ALB_ARN" >> $GITHUB_ENV
+            echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN" >> $GITHUB_ENV
             echo "CPU=$CPU" >> $GITHUB_ENV
 
             echo "Manifest values loaded into environment:"
@@ -128,7 +132,7 @@ jobs:
       - name: Determine Idle Service (Blue/Green)
         id: set-services
         run: |
-          ALB_ARN="${{ vars.ALB_ARN }}"
+          # ALB_ARN="${{ vars.ALB_ARN }}"
           BLUE_TG="${{ vars.BLUE_TG_ARN }}"
           GREEN_TG="${{ vars.GREEN_TG_ARN }}"
           CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
