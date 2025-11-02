@@ -1,0 +1,395 @@
+name: Reusable ECS Deployment (Blue-Green)
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: "ECS Service Base Name"
+        required: false
+        type: string
+      task-family:
+        description: "ECS Task Definition Family"
+        required: false
+        type: string
+      container-name:
+        description: "Container Name"
+        required: false
+        type: string
+      desired-count:
+        description: "Number of ECS tasks"
+        default: "1"
+        type: string
+      cpu:
+        default: "256"
+        type: string
+      memory:
+        default: "512"
+        type: string
+      image-tag:
+        description: "ECR image tag (commit SHA or latest)"
+        required: true
+        type: string
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
+      app-language:
+        description: "Application app-language (csharp, java, node, python)"
+        required: true
+        type: string
+      extra-env:
+        description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
+        type: string
+        default: '[]'
+      use-temp-listener:
+        description: "Enable temporary listener testing before flipping traffic"
+        required: false
+        type: boolean
+        default: true
+      temp-listener-port:
+        description: "Port for temporary listener for testing new version of code"
+        required: false
+        type: string
+        default: "8081"
+
+    outputs:
+      LIVE_SERVICE:
+        value: ${{ jobs.ecs-deploy.outputs.LIVE_SERVICE }}
+      IDLE_SERVICE:
+        value: ${{ jobs.ecs-deploy.outputs.IDLE_SERVICE }}
+      IDLE_TG:
+        value: ${{ jobs.ecs-deploy.outputs.IDLE_TG }}
+      TEMP_LISTENER_ARN:
+        value: ${{ jobs.ecs-deploy.outputs.TEMP_LISTENER_ARN }}
+      IS_FIRST_DEPLOY: 
+        value: ${{ jobs.ecs-deploy.outputs.IS_FIRST_DEPLOY }}
+
+jobs:
+  ecs-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      LIVE_SERVICE: ${{ steps.set-services.outputs.LIVE_SERVICE }}
+      IDLE_SERVICE: ${{ steps.set-services.outputs.IDLE_SERVICE }}
+      IDLE_TG: ${{ steps.set-services.outputs.IDLE_TG }}
+      TEMP_LISTENER_ARN: ${{ steps.app_endpoint_test.outputs.TEMP_LISTENER_ARN }}
+      IS_FIRST_DEPLOY: ${{ steps.set-services.outputs.IS_FIRST_DEPLOY }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
+          aws-region: us-east-2
+
+      - name: Determine Idle Service
+        id: set-services
+        run: |
+          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
+          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          BLUE_TG="${{ vars.BLUE_TG_ARN }}"
+          GREEN_TG="${{ vars.GREEN_TG_ARN }}"
+
+          EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
+            --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
+            --output text)
+
+          if [ -z "$EXISTING_SERVICES" ]; then
+            IS_FIRST_DEPLOY=true
+            LIVE_SERVICE="blue"
+            IDLE_SERVICE="blue"
+            IDLE_TG="$BLUE_TG"
+          else
+            ACTIVE_TG=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "${{ vars.ALB_ARN }}" \
+              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+              --output text)
+            if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
+              LIVE_SERVICE="blue"
+              IDLE_SERVICE="green"
+              IDLE_TG="$GREEN_TG"
+            else
+              LIVE_SERVICE="green"
+              IDLE_SERVICE="blue"
+              IDLE_TG="$BLUE_TG"
+            fi
+            IS_FIRST_DEPLOY=false
+          fi
+
+          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
+          echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
+
+      - name: Load environment manifest
+        id: load-manifest
+        run: |
+          ENV="${{ inputs.environment }}"
+          MANIFEST_FILE=".env-config/${ENV}.yml"
+          if [ -f "$MANIFEST_FILE" ]; then
+            yq -o=json '.' "$MANIFEST_FILE" > manifest.json
+            jq -r 'to_entries[] | "\(.key)=\(.value)"' manifest.json >> $GITHUB_ENV
+          fi
+
+      - name: Generate ECS Task Definition
+        id: gen-task
+        run: |
+          REPO_NAME=$(basename $GITHUB_REPOSITORY)
+          IMAGE_TAG="${{ inputs.image-tag }}"
+          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
+          APP_LANGUAGE="${{ inputs.app-language }}"
+          ENVIRONMENT="${{ inputs.environment }}"
+          DESIRED_COUNT="${DESIRED_COUNT:-${{ inputs.desired-count }}}"
+          CPU="${CPU:-${{ inputs.cpu }}}"
+          MEMORY="${MEMORY:-${{ inputs.memory }}}"
+          SERVICE_NAME="${SERVICE_NAME:-${INPUT_SERVICE_NAME:-$REPO_NAME}}"
+          TASK_FAMILY="${TASK_FAMILY:-${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}}"
+          CONTAINER_NAME="${CONTAINER_NAME:-${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}}"
+
+          ENV_VARS=$(jq -n \
+            --arg lang "$APP_LANGUAGE" \
+            --arg env "$ENVIRONMENT" \
+            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"8080"}]')
+
+          case "$APP_LANGUAGE" in
+            csharp)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},{"name":"ASPNETCORE_URLS","value":"http://+:8080"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
+              ;;
+            java)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"}]')
+              ;;
+            node)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"}]')
+              ;;
+            python)
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"}]')
+              ;;
+          esac
+
+          cat <<EOF > task-def.json
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "$CONTAINER_NAME",
+                "image": "$ECR_IMAGE",
+                "portMappings": [{"containerPort":8080}],
+                "essential": true,
+                "environment": $ENV_VARS,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/$TASK_FAMILY",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "$CPU",
+            "memory": "$MEMORY"
+          }
+          EOF
+
+      - name: Register ECS Task Definition
+        run: aws ecs register-task-definition --cli-input-json file://task-def.json
+
+      - name: Deploy Idle ECS Service
+        run: |
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
+          SERVICE_NAME="${INPUT_SERVICE_NAME}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+          DESIRED_COUNT=${{ inputs.desired-count }}
+
+          SERVICE_STATUS=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].status' --output text 2>/dev/null || echo "MISSING")
+
+          if [ "$SERVICE_STATUS" == "ACTIVE" ]; then
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --task-definition "$TASK_FAMILY" --desired-count "$DESIRED_COUNT" --force-new-deployment
+          else
+            NETWORK_CONFIG=$(cat <<EOF
+          {
+            "awsvpcConfiguration": {
+              "subnets": $(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")'),
+              "securityGroups": $(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")'),
+              "assignPublicIp": "ENABLED"
+            }
+          }
+          EOF
+          )
+            aws ecs create-service --cluster "$CLUSTER_NAME" --service-name "$SERVICE_NAME" --task-definition "$TASK_FAMILY" --desired-count "$DESIRED_COUNT" --launch-type FARGATE --network-configuration "$NETWORK_CONFIG" --load-balancers targetGroupArn=$IDLE_TG,containerName=$SERVICE_NAME,containerPort=8080
+          fi
+
+      # 6️⃣ Wait for ECS service to stabilize
+      - name: Wait for ECS service to stabilize
+        run: |
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
+          echo "Waiting for ECS service '$SERVICE_NAME' to become active..."
+          # Loop until service exists and is stable, or timeout
+          MAX_RETRIES=30
+          SLEEP_INTERVAL=20
+          RETRY=0
+          while true; do
+              SERVICE_STATUS=$(aws ecs describe-services \
+                  --cluster "$CLUSTER_NAME" \
+                  --services "$SERVICE_NAME" \
+                  --query 'services[0].status' \
+                  --output text 2>/dev/null || echo "NONE")
+
+              if [[ "$SERVICE_STATUS" == "ACTIVE" ]]; then
+                  echo "⏳ Service is active. Waiting for stability..."
+                  aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+                  echo "✅ ECS service is stable"
+                  break
+              elif [[ "$SERVICE_STATUS" == "DRAINING" ]]; then
+                  echo "Service is draining. Waiting for cleanup..."
+                  aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME"
+                  echo "✅ ECS service drained"
+                  break
+              elif [[ "$SERVICE_STATUS" == "NONE" || "$SERVICE_STATUS" == "INACTIVE" ]]; then
+                  echo "Service not active yet. Retrying in $SLEEP_INTERVAL seconds..."
+              else
+                  echo "Service status: $SERVICE_STATUS. Retrying in $SLEEP_INTERVAL seconds..."
+              fi
+              RETRY=$((RETRY+1))
+              if [[ $RETRY -ge $MAX_RETRIES ]]; then
+                  echo "⚠️ Timeout waiting for ECS service. Proceeding anyway..."
+                  break
+              fi
+              sleep $SLEEP_INTERVAL
+          done
+      
+      # 3️⃣ Validate Idle Target Group Health
+      - name: Validate Idle Target Group Health
+        id: check-health
+        run: |
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+          echo "Checking target health for idle TG: $IDLE_TG..."
+          # Get target health info
+          TARGETS=$(aws elbv2 describe-target-health --target-group-arn "$IDLE_TG" \
+            --query 'TargetHealthDescriptions[*].{Id:Target.Id,Port:Target.Port,State:TargetHealth.State}' \
+            --output json)
+          echo "Target Health:"
+          echo "$TARGETS" | jq -r '.[] | "🔹 \(.Id):\(.Port) → \(.State)"'
+          # Count healthy targets
+          HEALTHY_COUNT=$(echo "$TARGETS" | jq '[.[] | select(.State=="healthy")] | length')
+          echo "✅ Healthy targets count: $HEALTHY_COUNT"
+          if [ "$HEALTHY_COUNT" -eq 0 ]; then
+            echo "❌ No healthy targets available. Deployment cannot continue."
+            exit 1
+          fi
+          echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
+
+      # 8️⃣ Application Endpoint URL (Dynamic)
+      - name: Application Endpoint URL
+        id: app_endpoint_test
+        if: ${{ inputs.use-temp-listener }}
+        run: |
+          ALB_ARN="${{ vars.ALB_ARN }}"
+          TEMP_PORT=${{ inputs.temp-listener-port }}
+          IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
+          IS_FIRST_DEPLOY=${{ steps.set-services.outputs.IS_FIRST_DEPLOY }}
+
+          echo "Fetching ALB DNS..."
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --load-balancer-arns "$ALB_ARN" \
+            --query 'LoadBalancers[0].DNSName' --output text)
+
+          if [[ "$IS_FIRST_DEPLOY" == "true" ]]; then
+            echo "🟢 First deployment detected — testing main endpoint only."
+            TEST_URL="http://${ALB_DNS}/health"
+            TEMP_LISTENER_ARN="none"
+          else
+            echo "🟡 Creating temporary listener on port $TEMP_PORT for validation..."
+            TEMP_LISTENER_ARN=$(aws elbv2 create-listener \
+              --load-balancer-arn "$ALB_ARN" \
+              --protocol HTTP \
+              --port "$TEMP_PORT" \
+              --default-actions Type=forward,TargetGroupArn="$IDLE_TG" \
+              --query 'Listeners[0].ListenerArn' --output text)
+
+            TEST_URL="http://${ALB_DNS}:${TEMP_PORT}/health"
+            echo "✅ Temporary listener created on port $TEMP_PORT"
+          fi
+
+          echo "🔗 Testing Application Endpoint: $TEST_URL"
+          echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
+          echo "TEST_URL=$TEST_URL" >> $GITHUB_OUTPUT
+
+      #  🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
+      - name: Cleanup old ECS Task Definitions
+        if: always()
+        run: |
+          set -euo pipefail
+          # Color codes
+          YELLOW='\033[1;33m'
+          GREEN='\033[1;32m'
+          NC='\033[0m' # No Color
+          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
+          KEEP_LAST=5
+
+          echo -e "🔍 Fetching task definitions for family: ${YELLOW}$TASK_FAMILY${NC}..."
+          # Get all revisions sorted from oldest to newest
+          REVISIONS=$(aws ecs list-task-definitions \
+              --family-prefix "$TASK_FAMILY" \
+              --sort ASC \
+              --query 'taskDefinitionArns' \
+              --output text)
+          TOTAL=$(echo $REVISIONS | wc -w)
+          DELETE_COUNT=$((TOTAL - KEEP_LAST))
+
+          if [ $DELETE_COUNT -le 0 ]; then
+              echo -e "✅ Nothing to delete. Total revisions: ${GREEN}$TOTAL${NC}"
+              exit 0
+          fi
+
+          # Find task definitions in use by any active services in the cluster, but only for this task family
+          ACTIVE_IN_USE=()
+          for svc in $(aws ecs list-services --cluster "$CLUSTER_NAME" --query 'serviceArns' --output text); do
+              td=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$svc" \
+                  --query 'services[].taskDefinition' --output text)
+
+              # Only keep task definitions that match our family
+              if [[ "$td" == *"$TASK_FAMILY"* ]]; then
+                  ACTIVE_IN_USE+=("$td")
+                  echo -e "🔎 Active task definition ${YELLOW}$TASK_FAMILY${NC} in use by service ${GREEN}$svc${NC}"
+              fi
+          done
+
+          # Remove duplicates and sort
+          ACTIVE_IN_USE=($(printf "%s\n" "${ACTIVE_IN_USE[@]}" | sort -u))
+
+          # Revisions to attempt deletion
+          TO_DELETE=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=1;i<=c;i++) print $i}')
+          KEPT=()
+
+          echo "🗑️ Checking and deleting old task definition revisions..."
+          for rev in $TO_DELETE; do
+              if printf '%s\n' "${ACTIVE_IN_USE[@]}" | grep -qx "$rev"; then
+                  echo -e "⏭️ Skipping ${YELLOW}$rev${NC} (still in use by one or more services)"
+                  KEPT+=("$rev")
+              else
+                  echo -e "🗑️ Deleting ${YELLOW}$rev${NC}"
+                  aws ecs deregister-task-definition --task-definition "$rev" \
+                      --query 'taskDefinition.taskDefinitionArn' --output text >/dev/null
+              fi
+          done
+
+          # Add the remaining last $KEEP_LAST revisions to KEPT
+          REMAINING=$(echo $REVISIONS | awk -v c=$DELETE_COUNT '{for(i=c+1;i<=NF;i++) print $i}')
+          for r in $REMAINING; do KEPT+=("$r"); done
+
+          echo -e "✅ Cleanup complete. Kept last $KEEP_LAST revisions, skipped active ones:"
+          for r in "${KEPT[@]}"; do
+              echo -e "   - ${YELLOW}$r${NC}"
+          done
