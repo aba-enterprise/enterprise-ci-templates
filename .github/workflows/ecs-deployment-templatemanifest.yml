@@ -81,52 +81,52 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Load environment manifest
-        id: load-manifest1
-        run: |
-          ENV="${{ inputs.environment }}"
-          MANIFEST_FILE="manifest/manifest-ecs.yml"
+      # - name: Load environment manifest
+      #   id: load-manifest1
+      #   run: |
+      #     ENV="${{ inputs.environment }}"
+      #     MANIFEST_FILE="manifest/manifest-ecs.yml"
 
-          echo "Reading ECS manifest for environment: $ENV"
-          if [ -f "$MANIFEST_FILE" ]; then
-            # Extract the environment-specific section
-            yq -o=json ".environments.$ENV" "$MANIFEST_FILE" > manifest.json
+      #     echo "Reading ECS manifest for environment: $ENV"
+      #     if [ -f "$MANIFEST_FILE" ]; then
+      #       # Extract the environment-specific section
+      #       yq -o=json ".environments.$ENV" "$MANIFEST_FILE" > manifest.json
 
-            echo "Loaded manifest.json content:"
-            cat manifest.json | jq .
+      #       echo "Loaded manifest.json content:"
+      #       cat manifest.json | jq .
 
-            # Flatten relevant fields for easier access in next steps
-            SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
-            CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
-            TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
-            TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
-            ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
-            ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
-            DESIRED_COUNT=$(yq -r ".environments.$ENV.service.aws.desiredCount" "$MANIFEST_FILE")
-            EXECUTION_ROLE_NAME=$(yq -r ".environments.$ENV.service.aws.executionRoleName" "$MANIFEST_FILE")
-            CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
-            MEMORY=$(yq -r ".environments.$ENV.service.container.memory" "$MANIFEST_FILE")
-            CONTAINER_PORT=$(yq -r ".environments.$ENV.service.container.port" "$MANIFEST_FILE")
+      #       # Flatten relevant fields for easier access in next steps
+      #       SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
+      #       CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
+      #       TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
+      #       TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
+      #       ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
+      #       ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
+      #       DESIRED_COUNT=$(yq -r ".environments.$ENV.service.aws.desiredCount" "$MANIFEST_FILE")
+      #       EXECUTION_ROLE_NAME=$(yq -r ".environments.$ENV.service.aws.executionRoleName" "$MANIFEST_FILE")
+      #       CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
+      #       MEMORY=$(yq -r ".environments.$ENV.service.container.memory" "$MANIFEST_FILE")
+      #       CONTAINER_PORT=$(yq -r ".environments.$ENV.service.container.port" "$MANIFEST_FILE")
             
 
-            echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
-            echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-            echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
-            echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
-            echo "ALB_ARN=$ALB_ARN" >> $GITHUB_ENV
-            echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN" >> $GITHUB_ENV
-            echo "CPU=$CPU" >> $GITHUB_ENV
-            echo "MEMORY=$MEMORY" >> $GITHUB_ENV
-            echo "CONTAINER_PORT=$CONTAINER_PORT" >> $GITHUB_ENV
-            echo "DESIRED_COUNT=$DESIRED_COUNT" >> $GITHUB_ENV
-            echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME" >> $GITHUB_ENV
+      #       echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+      #       echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+      #       echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
+      #       echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
+      #       echo "ALB_ARN=$ALB_ARN" >> $GITHUB_ENV
+      #       echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN" >> $GITHUB_ENV
+      #       echo "CPU=$CPU" >> $GITHUB_ENV
+      #       echo "MEMORY=$MEMORY" >> $GITHUB_ENV
+      #       echo "CONTAINER_PORT=$CONTAINER_PORT" >> $GITHUB_ENV
+      #       echo "DESIRED_COUNT=$DESIRED_COUNT" >> $GITHUB_ENV
+      #       echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME" >> $GITHUB_ENV
 
-            echo "Manifest values loaded into environment:"
-            cat $GITHUB_ENV
-          else
-            echo "❌ Manifest file not found at $MANIFEST_FILE"
-            exit 1
-          fi
+      #       echo "Manifest values loaded into environment:"
+      #       cat $GITHUB_ENV
+      #     else
+      #       echo "❌ Manifest file not found at $MANIFEST_FILE"
+      #       exit 1
+      #     fi
 
       - name: Load environment manifest
         id: load-manifest
@@ -251,25 +251,28 @@ jobs:
           TASK_FAMILY="$SERVICE_NAME-task"
           CONTAINER_NAME="$SERVICE_NAME-container"
 
-          ENV_VARS=$(jq -n \
-            --arg lang "$APP_LANGUAGE" \
-            --arg env "$ENVIRONMENT" \
-            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}]')
+          ENV_VARS=$(echo "$ENV_VARS" | jq --argjson manifest_vars "$(jq -n '{APP_ENV: env.APP_ENV, LOG_LEVEL: env.LOG_LEVEL, ASPNETCORE_ENVIRONMENT: env.ASPNETCORE_ENVIRONMENT}')" \
+            '. + ([.manifest_vars | to_entries[] | {name:.key, value:.value}])')
 
-          case "$APP_LANGUAGE" in
-            csharp)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},{"name":"ASPNETCORE_URLS","value":"http://+:8080"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
-              ;;
-            java)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
-              ;;
-            node)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
-              ;;
-            python)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
-              ;;
-          esac
+          # ENV_VARS=$(jq -n \
+          #   --arg lang "$APP_LANGUAGE" \
+          #   --arg env "$ENVIRONMENT" \
+          #   '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}]')
+
+          # case "$APP_LANGUAGE" in
+          #   csharp)
+          #     ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},{"name":"ASPNETCORE_URLS","value":"http://+:8080"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
+          #     ;;
+          #   java)
+          #     ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
+          #     ;;
+          #   node)
+          #     ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
+          #     ;;
+          #   python)
+          #     ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"},{"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}]')
+          #     ;;
+          # esac
 
           cat <<EOF > task-def.json
           {
