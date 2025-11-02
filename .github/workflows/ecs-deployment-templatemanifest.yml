@@ -3,24 +3,24 @@ name: Reusable ECS Deployment (Blue-Green)
 on:
   workflow_call:
     inputs:
-      service-name:
-        description: "ECS Service Base Name"
-        required: false
-        type: string
-      container-name:
-        description: "Container Name"
-        required: false
-        type: string
-      desired-count:
-        description: "Number of ECS tasks"
-        default: "1"
-        type: string
-      cpu:
-        default: "256"
-        type: string
-      memory:
-        default: "512"
-        type: string
+      # service-name:
+      #   description: "ECS Service Base Name"
+      #   required: false
+      #   type: string
+      # container-name:
+      #   description: "Container Name"
+      #   required: false
+      #   type: string
+      # desired-count:
+      #   description: "Number of ECS tasks"
+      #   default: "1"
+      #   type: string
+      # cpu:
+      #   default: "256"
+      #   type: string
+      # memory:
+      #   default: "512"
+      #   type: string
       image-tag:
         description: "ECR image tag (commit SHA or latest)"
         required: true
@@ -34,11 +34,11 @@ on:
         description: "Application app-language (csharp, java, node, python)"
         required: true
         type: string
-      use-temp-listener:
-        description: "Enable temporary listener testing before flipping traffic"
-        required: false
-        type: boolean
-        default: true
+      # use-temp-listener:
+      #   description: "Enable temporary listener testing before flipping traffic"
+      #   required: false
+      #   type: boolean
+      #   default: true
       temp-listener-port:
         description: "Port for temporary listener for testing new version of code"
         required: false
@@ -369,9 +369,9 @@ jobs:
       # 8️⃣ Application Endpoint URL (Dynamic)
       - name: Application Endpoint URL
         id: app_endpoint_test
-        if: ${{ inputs.use-temp-listener }}
+        # if: ${{ inputs.use-temp-listener }}
         run: |
-          ALB_ARN="${{ vars.ALB_ARN }}"
+          # ALB_ARN="${{ vars.ALB_ARN }}"
           TEMP_PORT=${{ inputs.temp-listener-port }}
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
           IS_FIRST_DEPLOY=${{ steps.set-services.outputs.IS_FIRST_DEPLOY }}
@@ -411,9 +411,10 @@ jobs:
           YELLOW='\033[1;33m'
           GREEN='\033[1;32m'
           NC='\033[0m' # No Color
-          SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
-          CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
+          TASK_FAMILY="$SERVICE_NAME-task"
+          # SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          # TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          # CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           KEEP_LAST=5
 
           echo -e "🔍 Fetching task definitions for family: ${YELLOW}$TASK_FAMILY${NC}..."
