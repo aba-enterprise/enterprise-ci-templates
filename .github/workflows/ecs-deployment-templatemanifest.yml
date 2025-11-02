@@ -131,47 +131,64 @@ jobs:
       - name: Load environment manifest
         id: load-manifest1
         run: |
+          set -e
           ENV="${{ inputs.environment }}"
           MANIFEST_FILE="manifest/manifest-ecs.yml"
 
           echo "📘 Reading ECS manifest for environment: $ENV"
           if [ -f "$MANIFEST_FILE" ]; then
-            # Extract the environment-specific section
+            # Extract environment-specific section
             yq -o=json ".environments.$ENV" "$MANIFEST_FILE" > manifest.json
 
             echo "✅ Loaded manifest.json content:"
             cat manifest.json | jq .
 
-            # Flatten relevant fields for easier access in next steps
+            echo "🌱 Flattening manifest values..."
+
+            # Core service values
             SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
             CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
-            TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
-            TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
-            ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
-            ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
             DESIRED_COUNT=$(yq -r ".environments.$ENV.service.aws.desiredCount" "$MANIFEST_FILE")
             EXECUTION_ROLE_NAME=$(yq -r ".environments.$ENV.service.aws.executionRoleName" "$MANIFEST_FILE")
+            ECR_REPO_NAME=$(yq -r ".environments.$ENV.service.aws.ecrreponame" "$MANIFEST_FILE")
+
+            # Container configuration
             CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
             MEMORY=$(yq -r ".environments.$ENV.service.container.memory" "$MANIFEST_FILE")
             CONTAINER_PORT=$(yq -r ".environments.$ENV.service.container.port" "$MANIFEST_FILE")
 
-            # Write the ECS-related values to GitHub environment
+            # Load Balancer and Target Groups
+            ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
+            ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
+            TG_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
+            TG_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
+
+            # Network Configuration
+            ASSIGN_PUBLIC_IP=$(yq -r ".environments.$ENV.service.aws.networkConfiguration.assignPublicIp" "$MANIFEST_FILE")
+            SUBNETS=$(yq -r ".environments.$ENV.service.aws.networkConfiguration.subnets | join(\",\")" "$MANIFEST_FILE")
+            SECURITY_GROUPS=$(yq -r ".environments.$ENV.service.aws.networkConfiguration.securityGroups | join(\",\")" "$MANIFEST_FILE")
+
+            # Write ECS and container values to GITHUB_ENV
             {
               echo "SERVICE_NAME=$SERVICE_NAME"
               echo "CLUSTER_NAME=$CLUSTER_NAME"
-              echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE"
-              echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN"
-              echo "ALB_ARN=$ALB_ARN"
-              echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN"
+              echo "DESIRED_COUNT=$DESIRED_COUNT"
+              echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME"
+              echo "ECR_REPO_NAME=$ECR_REPO_NAME"
               echo "CPU=$CPU"
               echo "MEMORY=$MEMORY"
               echo "CONTAINER_PORT=$CONTAINER_PORT"
-              echo "DESIRED_COUNT=$DESIRED_COUNT"
-              echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME"
+              echo "ALB_ARN=$ALB_ARN"
+              echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN"
+              echo "TARGET_GROUP_BLUE=$TG_BLUE"
+              echo "TARGET_GROUP_GREEN=$TG_GREEN"
+              echo "ASSIGN_PUBLIC_IP=$ASSIGN_PUBLIC_IP"
+              echo "SUBNETS=$SUBNETS"
+              echo "SECURITY_GROUPS=$SECURITY_GROUPS"
             } >> $GITHUB_ENV
 
-            # ✅ Extract all container environment variables
-            echo "🌱 Loading container environment variables..."
+            # Extract all environmentVariables from container
+            echo "🌍 Loading container environment variables..."
             yq -o=json ".environments.$ENV.service.container.environmentVariables[]" "$MANIFEST_FILE" \
               | jq -r '. | "\(.name)=\(.value)"' >> $GITHUB_ENV
 
@@ -182,7 +199,6 @@ jobs:
             echo "❌ Manifest file not found at $MANIFEST_FILE"
             exit 1
           fi
-
 
       - name: Determine Idle Service (Blue/Green)
         id: set-services
