@@ -288,9 +288,9 @@ jobs:
             NETWORK_CONFIG=$(cat <<EOF
           {
             "awsvpcConfiguration": {
-              "subnets": $(echo "${{ vars.AWS_SUBNETS }}" | jq -R 'split(",")'),
-              "securityGroups": $(echo "${{ vars.AWS_SECURITY_GROUPS }}" | jq -R 'split(",")'),
-              "assignPublicIp": "ENABLED"
+              "subnets": $(echo "$SUBNETS" | jq -R 'split(",")'),
+              "securityGroups": $(echo "$SECURITY_GROUPS" | jq -R 'split(",")'),
+              "assignPublicIp": "$ASSIGN_PUBLIC_IP"
             }
           }
           EOF
