@@ -251,8 +251,9 @@ jobs:
           TASK_FAMILY="$SERVICE_NAME-task"
           CONTAINER_NAME="$SERVICE_NAME-container"
 
-          ENV_VARS=$(echo "$ENV_VARS" | jq --argjson manifest_vars "$(jq -n '{APP_ENV: env.APP_ENV, LOG_LEVEL: env.LOG_LEVEL, ASPNETCORE_ENVIRONMENT: env.ASPNETCORE_ENVIRONMENT}')" \
-            '. + ([.manifest_vars | to_entries[] | {name:.key, value:.value}])')
+          # Load container environment variables dynamically from manifest
+          ENV_VARS=$(yq -o=json ".environments.${{ inputs.environment }}.service.container.environmentVariables[]" manifest/manifest-ecs.yml \
+            | jq '[.[] | {name: .name, value: .value}]')
 
           cat <<EOF > task-def.json
           {
