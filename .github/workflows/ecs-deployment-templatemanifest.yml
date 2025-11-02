@@ -81,53 +81,6 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: ${{ vars.AWS_REGION }}
 
-      # - name: Load environment manifest
-      #   id: load-manifest1
-      #   run: |
-      #     ENV="${{ inputs.environment }}"
-      #     MANIFEST_FILE="manifest/manifest-ecs.yml"
-
-      #     echo "Reading ECS manifest for environment: $ENV"
-      #     if [ -f "$MANIFEST_FILE" ]; then
-      #       # Extract the environment-specific section
-      #       yq -o=json ".environments.$ENV" "$MANIFEST_FILE" > manifest.json
-
-      #       echo "Loaded manifest.json content:"
-      #       cat manifest.json | jq .
-
-      #       # Flatten relevant fields for easier access in next steps
-      #       SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
-      #       CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
-      #       TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
-      #       TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
-      #       ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
-      #       ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
-      #       DESIRED_COUNT=$(yq -r ".environments.$ENV.service.aws.desiredCount" "$MANIFEST_FILE")
-      #       EXECUTION_ROLE_NAME=$(yq -r ".environments.$ENV.service.aws.executionRoleName" "$MANIFEST_FILE")
-      #       CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
-      #       MEMORY=$(yq -r ".environments.$ENV.service.container.memory" "$MANIFEST_FILE")
-      #       CONTAINER_PORT=$(yq -r ".environments.$ENV.service.container.port" "$MANIFEST_FILE")
-            
-
-      #       echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
-      #       echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-      #       echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
-      #       echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
-      #       echo "ALB_ARN=$ALB_ARN" >> $GITHUB_ENV
-      #       echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN" >> $GITHUB_ENV
-      #       echo "CPU=$CPU" >> $GITHUB_ENV
-      #       echo "MEMORY=$MEMORY" >> $GITHUB_ENV
-      #       echo "CONTAINER_PORT=$CONTAINER_PORT" >> $GITHUB_ENV
-      #       echo "DESIRED_COUNT=$DESIRED_COUNT" >> $GITHUB_ENV
-      #       echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME" >> $GITHUB_ENV
-
-      #       echo "Manifest values loaded into environment:"
-      #       cat $GITHUB_ENV
-      #     else
-      #       echo "❌ Manifest file not found at $MANIFEST_FILE"
-      #       exit 1
-      #     fi
-
       - name: Load environment manifest
         id: load-manifest
         run: |
@@ -191,11 +144,11 @@ jobs:
             echo "SECURITY_GROUPS=$SECURITY_GROUPS"
           } >> $GITHUB_ENV
 
-          # --- Dynamically extract container environmentVariables[] ---
-          echo "🌍 Loading container environment variables..."
-          jq -r '.service.container.environmentVariables[] | "\(.name)=\(.value)"' manifest.json >> $GITHUB_ENV
+          # # --- Dynamically extract container environmentVariables[] ---
+          # echo "🌍 Loading container environment variables..."
+          # jq -r '.service.container.environmentVariables[] | "\(.name)=\(.value)"' manifest.json >> $GITHUB_ENV
 
-          echo "✅ Final environment variables loaded into job:"
+          # echo "✅ Final environment variables loaded into job:"
           cat $GITHUB_ENV | sed 's/^/   /'
 
       - name: Determine Idle Service (Blue/Green)
@@ -239,49 +192,6 @@ jobs:
           echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
           echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
           echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
-
-      # - name: Generate ECS Task Definition
-      #   id: gen-task
-      #   run: |
-      #     IMAGE_TAG="${{ inputs.image-tag }}"
-      #     # ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
-      #     ECR_IMAGE="707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-830039f"
-      #     APP_LANGUAGE="${{ inputs.app-language }}"
-      #     ENVIRONMENT="${{ inputs.environment }}"
-      #     TASK_FAMILY="$SERVICE_NAME-task"
-      #     CONTAINER_NAME="$SERVICE_NAME-container"
-
-      #     # Load container environment variables dynamically from manifest
-      #     ENV_VARS=$(yq -o=json ".environments.${{ inputs.environment }}.service.container.environmentVariables[]" manifest/manifest-ecs.yml \
-      #       | jq '[.[] | {name: .name, value: .value}]')
-
-      #     cat <<EOF > task-def.json
-      #     {
-      #       "family": "$TASK_FAMILY",
-      #       "networkMode": "awsvpc",
-      #       "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/$EXECUTION_ROLE_NAME",
-      #       "containerDefinitions": [
-      #         {
-      #           "name": "$CONTAINER_NAME",
-      #           "image": "$ECR_IMAGE",
-      #           "portMappings": [{"containerPort":$CONTAINER_PORT}],
-      #           "essential": true,
-      #           "environment": $ENV_VARS,
-      #           "logConfiguration": {
-      #             "logDriver": "awslogs",
-      #             "options": {
-      #               "awslogs-group": "/ecs/$TASK_FAMILY",
-      #               "awslogs-region": "${{ vars.AWS_REGION }}",
-      #               "awslogs-stream-prefix": "ecs"
-      #             }
-      #           }
-      #         }
-      #       ],
-      #       "requiresCompatibilities": ["FARGATE"],
-      #       "cpu": "$CPU",
-      #       "memory": "$MEMORY"
-      #     }
-      #     EOF
       
       - name: Generate ECS Task Definition
         id: gen-task
@@ -305,25 +215,25 @@ jobs:
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
                 {"name":"ASPNETCORE_URLS","value":"http://+:8080"},
-                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
               ]')
               ;;
             java)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"},
-                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
               ]')
               ;;
             node)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"NODE_ENV","value":"production"},
-                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
               ]')
               ;;
             python)
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"PYTHONUNBUFFERED","value":"1"},
-                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
               ]')
               ;;
           esac
