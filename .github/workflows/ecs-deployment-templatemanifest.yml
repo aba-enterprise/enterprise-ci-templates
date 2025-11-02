@@ -7,10 +7,6 @@ on:
         description: "ECS Service Base Name"
         required: false
         type: string
-      task-family:
-        description: "ECS Task Definition Family"
-        required: false
-        type: string
       container-name:
         description: "Container Name"
         required: false
@@ -38,10 +34,6 @@ on:
         description: "Application app-language (csharp, java, node, python)"
         required: true
         type: string
-      extra-env:
-        description: "Extra environment variables as JSON array, e.g., [{\"name\":\"DB_URL\",\"value\":\"xyz\"}]"
-        type: string
-        default: '[]'
       use-temp-listener:
         description: "Enable temporary listener testing before flipping traffic"
         required: false
@@ -89,45 +81,6 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
           aws-region: us-east-2
 
-      - name: Determine Idle Service
-        id: set-services
-        run: |
-          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
-          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
-          BLUE_TG="${{ vars.BLUE_TG_ARN }}"
-          GREEN_TG="${{ vars.GREEN_TG_ARN }}"
-
-          EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
-            --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
-            --output text)
-
-          if [ -z "$EXISTING_SERVICES" ]; then
-            IS_FIRST_DEPLOY=true
-            LIVE_SERVICE="blue"
-            IDLE_SERVICE="blue"
-            IDLE_TG="$BLUE_TG"
-          else
-            ACTIVE_TG=$(aws elbv2 describe-listeners \
-              --load-balancer-arn "${{ vars.ALB_ARN }}" \
-              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
-              --output text)
-            if [ "$ACTIVE_TG" == "$BLUE_TG" ]; then
-              LIVE_SERVICE="blue"
-              IDLE_SERVICE="green"
-              IDLE_TG="$GREEN_TG"
-            else
-              LIVE_SERVICE="green"
-              IDLE_SERVICE="blue"
-              IDLE_TG="$BLUE_TG"
-            fi
-            IS_FIRST_DEPLOY=false
-          fi
-
-          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
-          echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
-          echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
-          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
-
       - name: Load environment manifest
         id: load-manifest
         run: |
@@ -145,17 +98,17 @@ jobs:
             # Flatten relevant fields for easier access in next steps
             SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
             CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
-            TASK_FAMILY=$(yq -r ".environments.$ENV.service.aws.taskFamily" "$MANIFEST_FILE")
             REGION=$(yq -r ".environments.$ENV.service.aws.region" "$MANIFEST_FILE")
             TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
             TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
+            CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
 
             echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
             echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-            echo "TASK_FAMILY=$TASK_FAMILY" >> $GITHUB_ENV
             echo "REGION=$REGION" >> $GITHUB_ENV
             echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE" >> $GITHUB_ENV
             echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN" >> $GITHUB_ENV
+            echo "CPU=$CPU" >> $GITHUB_ENV
 
             echo "Manifest values loaded into environment:"
             cat $GITHUB_ENV
@@ -164,15 +117,51 @@ jobs:
             exit 1
           fi
 
-        
       - name: Debug loaded ECS values
         run: |
           echo "Cluster: $CLUSTER_NAME"
           echo "Service: $SERVICE_NAME"
-          echo "Task Family: $TASK_FAMILY"
           echo "Region: $REGION"
           echo "Blue TG: $TARGET_GROUP_BLUE"
           echo "Green TG: $TARGET_GROUP_GREEN"
+
+      - name: Determine Idle Service
+        id: set-services
+        run: |
+          CLUSTER_NAME="${{ vars.AWS_CLUSTER_NAME }}"
+          BASE_SERVICE_NAME="${INPUT_SERVICE_NAME:-$(basename $GITHUB_REPOSITORY)}"
+          echo "BASE_SERVICE_NAME - $BASE_SERVICE_NAME"
+
+          EXISTING_SERVICES=$(aws ecs list-services --cluster "$CLUSTER_NAME" \
+            --query "serviceArns[?contains(@, '${BASE_SERVICE_NAME}')]" \
+            --output text)
+
+          if [ -z "$EXISTING_SERVICES" ]; then
+            IS_FIRST_DEPLOY=true
+            LIVE_SERVICE="blue"
+            IDLE_SERVICE="blue"
+            IDLE_TG="$TARGET_GROUP_BLUE"
+          else
+            ACTIVE_TG=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "${{ vars.ALB_ARN }}" \
+              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+              --output text)
+            if [ "$ACTIVE_TG" == "$TARGET_GROUP_BLUE" ]; then
+              LIVE_SERVICE="blue"
+              IDLE_SERVICE="green"
+              IDLE_TG="$TARGET_GROUP_GREEN"
+            else
+              LIVE_SERVICE="green"
+              IDLE_SERVICE="blue"
+              IDLE_TG="$TARGET_GROUP_BLUE"
+            fi
+            IS_FIRST_DEPLOY=false
+          fi
+
+          echo "IS_FIRST_DEPLOY=$IS_FIRST_DEPLOY" >> $GITHUB_OUTPUT
+          echo "LIVE_SERVICE=$LIVE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_SERVICE=$IDLE_SERVICE" >> $GITHUB_OUTPUT
+          echo "IDLE_TG=$IDLE_TG" >> $GITHUB_OUTPUT
 
       - name: Generate ECS Task Definition
         id: gen-task
@@ -185,9 +174,8 @@ jobs:
           DESIRED_COUNT="${DESIRED_COUNT:-${{ inputs.desired-count }}}"
           CPU="${CPU:-${{ inputs.cpu }}}"
           MEMORY="${MEMORY:-${{ inputs.memory }}}"
-          SERVICE_NAME="${SERVICE_NAME:-${INPUT_SERVICE_NAME:-$REPO_NAME}}"
-          TASK_FAMILY="${TASK_FAMILY:-${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}}"
-          CONTAINER_NAME="${CONTAINER_NAME:-${INPUT_CONTAINER_NAME:-${SERVICE_NAME}-container}}"
+          TASK_FAMILY="${SERVICE_NAME}-task}}"
+          CONTAINER_NAME="${SERVICE_NAME}-container}}"
 
           ENV_VARS=$(jq -n \
             --arg lang "$APP_LANGUAGE" \
