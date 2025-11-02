@@ -129,10 +129,25 @@ jobs:
         id: load-manifest
         run: |
           ENV="${{ inputs.environment }}"
-          MANIFEST_FILE=".env-config/${ENV}.yml"
+          
+          MANIFEST_FILE="manifest/manifest.yml"
+
+          echo "Reading manifest for environment: $ENV"
           if [ -f "$MANIFEST_FILE" ]; then
-            yq -o=json '.' "$MANIFEST_FILE" > manifest.json
+            # Extract only the section matching the environment
+            yq -o=json ".$ENV" "$MANIFEST_FILE" > manifest.json
+
+            echo "Loaded manifest.json content:"
+            cat manifest.json | jq .
+
+            # Convert JSON key-value pairs into environment variables
             jq -r 'to_entries[] | "\(.key)=\(.value)"' manifest.json >> $GITHUB_ENV
+
+            echo "Manifest values loaded into environment:"
+            cat $GITHUB_ENV
+          else
+            echo "Manifest file not found at $MANIFEST_FILE"
+            exit 1
           fi
 
       - name: Generate ECS Task Definition
@@ -224,7 +239,14 @@ jobs:
           }
           EOF
           )
-            aws ecs create-service --cluster "$CLUSTER_NAME" --service-name "$SERVICE_NAME" --task-definition "$TASK_FAMILY" --desired-count "$DESIRED_COUNT" --launch-type FARGATE --network-configuration "$NETWORK_CONFIG" --load-balancers targetGroupArn=$IDLE_TG,containerName=$SERVICE_NAME,containerPort=8080
+            aws ecs create-service \
+            --cluster "$CLUSTER_NAME" \
+            --service-name "$SERVICE_NAME" \
+            --task-definition "$TASK_FAMILY" \
+            --desired-count "$DESIRED_COUNT" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK_CONFIG" \
+            --load-balancers targetGroupArn=$IDLE_TG,containerName=$SERVICE_NAME,containerPort=8080
           fi
 
       # 6️⃣ Wait for ECS service to stabilize
