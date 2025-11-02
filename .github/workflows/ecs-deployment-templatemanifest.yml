@@ -79,7 +79,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/GitHubActionsECSDeployRole
-          aws-region: us-east-2
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Load environment manifest
         id: load-manifest
