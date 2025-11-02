@@ -287,65 +287,75 @@ jobs:
         id: gen-task
         run: |
           set -e
+
           IMAGE_TAG="${{ inputs.image-tag }}"
-          ECR_IMAGE="707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-830039f"
+          APP_LANGUAGE="${{ inputs.app-language }}"
+          ENVIRONMENT="${{ inputs.environment }}"
+
+          # ECS core values (loaded from previous job via $GITHUB_ENV)
           TASK_FAMILY="$SERVICE_NAME-task"
           CONTAINER_NAME="$SERVICE_NAME-container"
 
           # Load container environment variables dynamically from manifest
-          ENV_VARS=$(yq -o=json ".environments.${{ inputs.environment }}.service.container.environmentVariables[]" manifest/manifest-ecs.yml \
-            | jq '[.[] | {name: .name, value: .value}]')
+          ENV_VARS=$(yq -o=json ".environments.$ENVIRONMENT.service.container.environmentVariables" manifest/manifest-ecs.yml)
 
-          # Add language-specific variables if needed
-          case "${{ inputs.app-language }}" in
+          # Append language-specific vars dynamically
+          case "$APP_LANGUAGE" in
             csharp)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},{"name":"ASPNETCORE_URLS","value":"http://+:8080"},{"name":"LIVE_SERVICE","value":"'"${{ steps.set-services.outputs.IDLE_SERVICE }}"'"}]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
+                {"name":"ASPNETCORE_URLS","value":"http://+:8080"},
+                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+              ]')
               ;;
             java)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"},{"name":"LIVE_SERVICE","value":"'"${{ steps.set-services.outputs.IDLE_SERVICE }}"'"}]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"JAVA_TOOL_OPTIONS","value":"-Dfile.encoding=UTF-8"},
+                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+              ]')
               ;;
             node)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"NODE_ENV","value":"production"},{"name":"LIVE_SERVICE","value":"'"${{ steps.set-services.outputs.IDLE_SERVICE }}"'"}]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"NODE_ENV","value":"production"},
+                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+              ]')
               ;;
             python)
-              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [{"name":"PYTHONUNBUFFERED","value":"1"},{"name":"LIVE_SERVICE","value":"'"${{ steps.set-services.outputs.IDLE_SERVICE }}"'"}]')
+              ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
+                {"name":"PYTHONUNBUFFERED","value":"1"},
+                {"name":"LIVE_SERVICE","value":"'"${IDLE_SERVICE}"'"}
+              ]')
               ;;
           esac
 
-          # Generate task definition JSON
-          jq -n --arg family "$TASK_FAMILY" \
-                --arg executionRole "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/$EXECUTION_ROLE_NAME" \
-                --arg containerName "$CONTAINER_NAME" \
-                --arg image "$ECR_IMAGE" \
-                --argjson env "$ENV_VARS" \
-                --argjson portMappings "[{\"containerPort\":$CONTAINER_PORT}]" \
-                --arg cpu "$CPU" \
-                --arg memory "$MEMORY" \
-                '{
-                  family: $family,
-                  networkMode: "awsvpc",
-                  executionRoleArn: $executionRole,
-                  containerDefinitions: [
-                    {
-                      name: $containerName,
-                      image: $image,
-                      portMappings: $portMappings,
-                      essential: true,
-                      environment: $env,
-                      logConfiguration: {
-                        logDriver: "awslogs",
-                        options: {
-                          "awslogs-group": ("/ecs/" + $family),
-                          "awslogs-region": "${{ vars.AWS_REGION }}",
-                          "awslogs-stream-prefix": "ecs"
-                        }
-                      }
-                    }
-                  ],
-                  requiresCompatibilities: ["FARGATE"],
-                  cpu: $cpu,
-                  memory: $memory
-                }' > task-def.json
+          # Build ECS task definition JSON
+          cat <<EOF > task-def.json
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/$EXECUTION_ROLE_NAME",
+            "containerDefinitions": [
+              {
+                "name": "$CONTAINER_NAME",
+                "image": "707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-830039f",
+                "portMappings": [{"containerPort":$CONTAINER_PORT}],
+                "essential": true,
+                "environment": $ENV_VARS,
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/$TASK_FAMILY",
+                    "awslogs-region": "${{ vars.AWS_REGION }}",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "$CPU",
+            "memory": "$MEMORY"
+          }
+          EOF
 
       - name: Register ECS Task Definition
         run: aws ecs register-task-definition --cli-input-json file://task-def.json
