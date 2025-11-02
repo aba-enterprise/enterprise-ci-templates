@@ -176,6 +176,7 @@ jobs:
           set -e
 
           IMAGE_TAG="${{ inputs.image-tag }}"
+          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
           APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
 
@@ -226,7 +227,7 @@ jobs:
             "containerDefinitions": [
               {
                 "name": "$CONTAINER_NAME",
-                "image": "707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-830039f",
+                "image": "$ECR_IMAGE",
                 "portMappings": [{"containerPort":$CONTAINER_PORT}],
                 "essential": true,
                 "environment": $ENV_VARS,
