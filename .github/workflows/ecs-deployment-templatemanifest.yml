@@ -128,12 +128,61 @@ jobs:
             exit 1
           fi
 
-      - name: Debug loaded ECS values
+      - name: Load environment manifest
+        id: load-manifest1
         run: |
-          echo "Cluster: $CLUSTER_NAME"
-          echo "Service: $SERVICE_NAME"
-          echo "Blue TG: $TARGET_GROUP_BLUE"
-          echo "Green TG: $TARGET_GROUP_GREEN"
+          ENV="${{ inputs.environment }}"
+          MANIFEST_FILE="manifest/manifest-ecs.yml"
+
+          echo "📘 Reading ECS manifest for environment: $ENV"
+          if [ -f "$MANIFEST_FILE" ]; then
+            # Extract the environment-specific section
+            yq -o=json ".environments.$ENV" "$MANIFEST_FILE" > manifest.json
+
+            echo "✅ Loaded manifest.json content:"
+            cat manifest.json | jq .
+
+            # Flatten relevant fields for easier access in next steps
+            SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
+            CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
+            TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
+            TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
+            ALB_ARN=$(yq -r ".environments.$ENV.service.aws.alb.arn" "$MANIFEST_FILE")
+            ALB_LISTENER_ARN=$(yq -r ".environments.$ENV.service.aws.alb.mainlisteners.arn" "$MANIFEST_FILE")
+            DESIRED_COUNT=$(yq -r ".environments.$ENV.service.aws.desiredCount" "$MANIFEST_FILE")
+            EXECUTION_ROLE_NAME=$(yq -r ".environments.$ENV.service.aws.executionRoleName" "$MANIFEST_FILE")
+            CPU=$(yq -r ".environments.$ENV.service.container.cpu" "$MANIFEST_FILE")
+            MEMORY=$(yq -r ".environments.$ENV.service.container.memory" "$MANIFEST_FILE")
+            CONTAINER_PORT=$(yq -r ".environments.$ENV.service.container.port" "$MANIFEST_FILE")
+
+            # Write the ECS-related values to GitHub environment
+            {
+              echo "SERVICE_NAME=$SERVICE_NAME"
+              echo "CLUSTER_NAME=$CLUSTER_NAME"
+              echo "TARGET_GROUP_BLUE=$TARGET_GROUP_BLUE"
+              echo "TARGET_GROUP_GREEN=$TARGET_GROUP_GREEN"
+              echo "ALB_ARN=$ALB_ARN"
+              echo "ALB_LISTENER_ARN=$ALB_LISTENER_ARN"
+              echo "CPU=$CPU"
+              echo "MEMORY=$MEMORY"
+              echo "CONTAINER_PORT=$CONTAINER_PORT"
+              echo "DESIRED_COUNT=$DESIRED_COUNT"
+              echo "EXECUTION_ROLE_NAME=$EXECUTION_ROLE_NAME"
+            } >> $GITHUB_ENV
+
+            # ✅ Extract all container environment variables
+            echo "🌱 Loading container environment variables..."
+            yq -o=json ".environments.$ENV.service.container.environmentVariables[]" "$MANIFEST_FILE" \
+              | jq -r '. | "\(.name)=\(.value)"' >> $GITHUB_ENV
+
+            echo "✅ Final environment variables loaded into job:"
+            cat $GITHUB_ENV | sed 's/^/   /'
+
+          else
+            echo "❌ Manifest file not found at $MANIFEST_FILE"
+            exit 1
+          fi
+
 
       - name: Determine Idle Service (Blue/Green)
         id: set-services
@@ -191,8 +240,7 @@ jobs:
           ENV_VARS=$(jq -n \
             --arg lang "$APP_LANGUAGE" \
             --arg env "$ENVIRONMENT" \
-            --arg prot "$CONTAINER_PORT" \
-            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}, {"name":"PORT","value":"$prot"}]')
+            '[{"name":"APP_LANGUAGE","value":$lang}, {"name":"ENVIRONMENT","value":$env}]')
 
           case "$APP_LANGUAGE" in
             csharp)
