@@ -144,11 +144,11 @@ jobs:
 
             # Flatten relevant fields for easier access in next steps
             SERVICE_NAME=$(yq -r ".environments.$ENV.service.name" "$MANIFEST_FILE")
-            CLUSTER_NAME=$(yq -r ".environments.$ENV.aws.cluster" "$MANIFEST_FILE")
-            TASK_FAMILY=$(yq -r ".environments.$ENV.aws.taskFamily" "$MANIFEST_FILE")
-            REGION=$(yq -r ".environments.$ENV.aws.region" "$MANIFEST_FILE")
-            TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.aws.targetGroups.blue" "$MANIFEST_FILE")
-            TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.aws.targetGroups.green" "$MANIFEST_FILE")
+            CLUSTER_NAME=$(yq -r ".environments.$ENV.service.aws.cluster" "$MANIFEST_FILE")
+            TASK_FAMILY=$(yq -r ".environments.$ENV.service.aws.taskFamily" "$MANIFEST_FILE")
+            REGION=$(yq -r ".environments.$ENV.service.aws.region" "$MANIFEST_FILE")
+            TARGET_GROUP_BLUE=$(yq -r ".environments.$ENV.service.aws.targetGroups.blue" "$MANIFEST_FILE")
+            TARGET_GROUP_GREEN=$(yq -r ".environments.$ENV.service.aws.targetGroups.green" "$MANIFEST_FILE")
 
             echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
             echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
@@ -163,6 +163,7 @@ jobs:
             echo "❌ Manifest file not found at $MANIFEST_FILE"
             exit 1
           fi
+
         
       - name: Debug loaded ECS values
         run: |
