@@ -215,7 +215,9 @@ jobs:
               ENV_VARS=$(echo "$ENV_VARS" | jq '[.[]] + [
                 {"name":"DOTNET_RUNNING_IN_CONTAINER","value":"true"},
                 {"name":"ASPNETCORE_URLS","value":"http://+:8080"},
-                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"}
+                {"name":"LIVE_SERVICE","value":"${{ steps.set-services.outputs.IDLE_SERVICE }}"},
+                {"name":"APP_LANGUAGE","value":"$APP_LANGUAGE},
+                {"name":"ENVIRONMENT","value":"$ENVIRONMENT"}
               ]')
               ;;
             java)
