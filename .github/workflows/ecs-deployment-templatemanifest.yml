@@ -174,8 +174,8 @@ jobs:
           DESIRED_COUNT="${DESIRED_COUNT:-${{ inputs.desired-count }}}"
           CPU="${CPU:-${{ inputs.cpu }}}"
           MEMORY="${MEMORY:-${{ inputs.memory }}}"
-          TASK_FAMILY="${SERVICE_NAME}-task}"
-          CONTAINER_NAME="${SERVICE_NAME}-container}}"
+          TASK_FAMILY="$SERVICE_NAME-task"
+          CONTAINER_NAME="$SERVICE_NAME-container"
 
           ENV_VARS=$(jq -n \
             --arg lang "$APP_LANGUAGE" \
