@@ -187,7 +187,8 @@ jobs:
         run: |
           # REPO_NAME=$(basename $GITHUB_REPOSITORY)
           IMAGE_TAG="${{ inputs.image-tag }}"
-          ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
+          # ECR_IMAGE="${{ vars.AWS_ACCOUNTID }}.dkr.ecr.us-east-2.amazonaws.com/${{ vars.AWS_ECR_REPO }}:${IMAGE_TAG}"
+          ECR_IMAGE="707733857215.dkr.ecr.us-east-2.amazonaws.com/nonprodimagerepository:dotnet-sample-app-830039f"
           APP_LANGUAGE="${{ inputs.app-language }}"
           ENVIRONMENT="${{ inputs.environment }}"
           
