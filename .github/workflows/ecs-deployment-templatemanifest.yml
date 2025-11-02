@@ -232,9 +232,11 @@ jobs:
         run: |
           CLUSTER_NAME=${{ vars.AWS_CLUSTER_NAME }}
           SERVICE_NAME="${INPUT_SERVICE_NAME}-${{ steps.set-services.outputs.IDLE_SERVICE }}"
-          TASK_FAMILY="${INPUT_TASK_FAMILY:-${SERVICE_NAME}-task}"
+          TASK_FAMILY="$SERVICE_NAME-task"
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
           DESIRED_COUNT=${{ inputs.desired-count }}
+
+          echo "SERVICE_NAME is - $SERVICE_NAME and Task $TASK_FAMILY"
 
           SERVICE_STATUS=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].status' --output text 2>/dev/null || echo "MISSING")
 
