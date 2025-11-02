@@ -130,7 +130,7 @@ jobs:
         run: |
           ENV="${{ inputs.environment }}"
           
-          MANIFEST_FILE="manifest/manifest.yml"
+          MANIFEST_FILE="manifest/manifest-ecs.yml"
 
           echo "Reading manifest for environment: $ENV"
           if [ -f "$MANIFEST_FILE" ]; then
