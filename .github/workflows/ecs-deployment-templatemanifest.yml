@@ -253,6 +253,7 @@ jobs:
       - name: Deploy Idle ECS Service
         run: |
           TASK_FAMILY="$SERVICE_NAME-task"
+          CONTAINER_NAME="$SERVICE_NAME-container"  # <-- Use the container name from the task definition
           SERVICE_NAME="$SERVICE_NAME-${{ steps.set-services.outputs.IDLE_SERVICE }}"
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
 
@@ -280,7 +281,7 @@ jobs:
             --desired-count "$DESIRED_COUNT" \
             --launch-type FARGATE \
             --network-configuration "$NETWORK_CONFIG" \
-            --load-balancers targetGroupArn=$IDLE_TG,containerName=$SERVICE_NAME,containerPort=8080
+            --load-balancers targetGroupArn=$IDLE_TG,containerName=$CONTAINER_NAME,containerPort=8080
           fi
 
       # 6️⃣ Wait for ECS service to stabilize
