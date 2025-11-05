@@ -110,6 +110,7 @@ jobs:
       # Run SonarScanner
       - name: Run SonarQube Scanner
         run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
           SONAR_PARAMS="-Dsonar.projectKey=${{ inputs.projectKey }} -Dsonar.organization=${{ inputs.organizationKey }} -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}"
 
           if [[ "${{ inputs.language }}" == "dotnet" ]]; then
