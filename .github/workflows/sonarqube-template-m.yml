@@ -74,7 +74,6 @@ jobs:
             echo "Restore the tools version from .config/dotnet-tools.json"
             dotnet tool restore
             echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-            dotnet sonarscanner --version
           elif [[ "${{ inputs.language }}" == "java" ]]; then
             echo "Using Maven/Gradle Sonar Plugin (already bundled)"
           elif [[ "${{ inputs.language }}" == "node" ]]; then
@@ -114,9 +113,6 @@ jobs:
           SONAR_PARAMS="-Dsonar.projectKey=${{ inputs.projectKey }} -Dsonar.organization=${{ inputs.organizationKey }} -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}"
 
           if [[ "${{ inputs.language }}" == "dotnet" ]]; then
-            # export DOTNET_ROOT=/usr/share/dotnet
-            # export PATH="$PATH:$HOME/.dotnet/tools"
-            dotnet sonarscanner --version
             COVERAGE_PATH="./coverage/**/coverage.opencover.xml"
             dotnet sonarscanner begin /k:"${{ inputs.projectKey }}" /o:"${{ inputs.organizationKey }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="$COVERAGE_PATH"
             dotnet build
