@@ -253,7 +253,7 @@ jobs:
       - name: Deploy Idle ECS Service
         run: |
           TASK_FAMILY="$SERVICE_NAME-task"
-          CONTAINER_NAME="$SERVICE_NAME-container"  # <-- Use the container name from the task definition
+          CONTAINER_NAME="$SERVICE_NAME-container"
           SERVICE_NAME="$SERVICE_NAME-${{ steps.set-services.outputs.IDLE_SERVICE }}"
           IDLE_TG=${{ steps.set-services.outputs.IDLE_TG }}
 
