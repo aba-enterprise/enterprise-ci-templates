@@ -206,6 +206,11 @@ jobs:
           fi
  
           commits=$(git log $range --pretty=format:"%s" --no-merges --first-parent)
+          # Exit early if no commits
+          if [ -z "$commits" ]; then
+            echo "ℹ️ No commits to check in this range."
+            exit 0
+          fi
           missing=0
  
           echo "📋 Commits in range $range:"
