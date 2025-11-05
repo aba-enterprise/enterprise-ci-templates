@@ -205,28 +205,26 @@ jobs:
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
 
-          commits=$(git log $range --pretty=format:"%s")
+          commits=$(git log $range --pretty=format:"%H %s")
           missing=0
 
-          # Exit early if no commits
-          if [ -z "$commits" ]; then
-            echo "ℹ️ No commits to check in this range."
-            exit 0
-          fi
-
           echo "📋 Commits in range $range:"
-          while IFS= read -r msg; do
-            # Explicitly skip merge commits
-            if echo "$msg" | grep -iqE '^Merge pull request'; then
-              echo "⚠️ Skipping merge commit: $msg"
+          while IFS= read -r line; do
+            commit_hash=$(echo "$line" | cut -d' ' -f1)
+            commit_msg=$(echo "$line" | cut -d' ' -f2-)
+
+            # Skip merge commits (any commit with more than 1 parent)
+            parent_count=$(git rev-list --count --parents -n 1 "$commit_hash")
+            if [ "$parent_count" -gt 1 ]; then
+              echo "⚠️ Skipping merge commit: $commit_msg"
               continue
             fi
 
-            # Check for Jira ticket pattern
-            if echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
-              echo "✅ $msg"
+            # Check Jira key
+            if echo "$commit_msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
+              echo "✅ $commit_msg"
             else
-              echo "❌ $msg (missing Jira key)"
+              echo "❌ $commit_msg (missing Jira key)"
               missing=1
             fi
           done <<< "$commits"
@@ -235,9 +233,7 @@ jobs:
             echo "❌ One or more commits do not include a Jira ticket. Please fix commit messages."
             exit 1
           fi
-
           echo "✅ All commits include Jira ticket numbers."
-
  
       # 7️⃣ Check PR title for Jira key (PR only)
       - name: Check PR title for Jira key
