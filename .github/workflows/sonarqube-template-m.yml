@@ -142,7 +142,7 @@ jobs:
           if [[ "${{ inputs.language }}" == "dotnet" ]]; then
             COVERAGE_FILE=$(find ./coverage -type f -name "coverage.opencover.xml" | head -n 1)
             if [ -f "$COVERAGE_FILE" ]; then
-              reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
+              dotnet tool run reportgenerator -reports:$COVERAGE_FILE -targetdir:coverage-summary -reporttypes:TextSummary
               echo "## 🔎 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
               cat coverage-summary/Summary.txt >> $GITHUB_STEP_SUMMARY
             fi
