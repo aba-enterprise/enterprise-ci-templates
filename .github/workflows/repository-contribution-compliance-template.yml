@@ -197,24 +197,32 @@ jobs:
         if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
-          
+
           # Determine commit range
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
           else
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
- 
-          commits=$(git log $range --pretty=format:"%s" --no-merges --first-parent)
+
+          commits=$(git log $range --pretty=format:"%s")
+          missing=0
+
           # Exit early if no commits
           if [ -z "$commits" ]; then
             echo "ℹ️ No commits to check in this range."
             exit 0
           fi
-          missing=0
- 
+
           echo "📋 Commits in range $range:"
           while IFS= read -r msg; do
+            # Explicitly skip merge commits
+            if echo "$msg" | grep -iqE '^Merge pull request'; then
+              echo "⚠️ Skipping merge commit: $msg"
+              continue
+            fi
+
+            # Check for Jira ticket pattern
             if echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
               echo "✅ $msg"
             else
@@ -222,12 +230,14 @@ jobs:
               missing=1
             fi
           done <<< "$commits"
- 
+
           if [ "$missing" -eq 1 ]; then
             echo "❌ One or more commits do not include a Jira ticket. Please fix commit messages."
             exit 1
           fi
+
           echo "✅ All commits include Jira ticket numbers."
+
  
       # 7️⃣ Check PR title for Jira key (PR only)
       - name: Check PR title for Jira key
