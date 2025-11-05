@@ -205,7 +205,7 @@ jobs:
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
  
-          commits=$(git log $range --pretty=format:"%s" --no-merges)
+          commits=$(git log $range --pretty=format:"%s" --no-merges --first-parent)
           missing=0
  
           echo "📋 Commits in range $range:"
