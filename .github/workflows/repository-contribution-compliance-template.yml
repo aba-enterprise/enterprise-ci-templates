@@ -70,6 +70,7 @@ jobs:
             echo "� Scanning $(echo "$CHANGED_FILES" | wc -l) changed files for secrets..."
             
             # Secret patterns (common sensitive data)
+            echo "Checking the files"
             #SECRET_PATTERNS="password|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|auth[_-]?token|bearer|oauth|jwt|credential"
             SECRET_PATTERNS="password\s*[=:]\s*[\"']|secret\s*[=:]\s*[\"']|(?<!sonar\.)token\s*[=:]\s*[\"']|api_key\s*[=:]\s*[\"']|auth_token\s*[=:]\s*[\"']"
             
