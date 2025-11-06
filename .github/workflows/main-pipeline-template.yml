@@ -1,0 +1,178 @@
+name: Main Pipeline Template
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        type: string
+        required: true
+        default: "main"
+      jira-prefix:
+        type: string
+        required: true
+        default: "SCRUM|PROJ|scrum|proj"
+      language:
+        type: string
+        required: true
+      projectPath:
+        type: string
+        required: true
+      buildCommand:
+        type: string
+        required: true
+      run-codeql-gate-check:
+        type: string
+        required: true
+        default: "no"
+      run-veracode-gate-check:
+        type: string
+        required: true
+        default: "yes"
+      projectKey:
+        type: string
+        required: true
+      organizationKey:
+        type: string
+        required: true
+      projectSlnPath:
+        type: string
+        required: true
+      testProjectPath:
+        type: string
+        required: true
+      language-version:
+        type: string
+        required: true
+      run-sonarqube-gate-check:
+        type: string
+        required: true
+        default: "no"
+      app-language:
+        type: string
+        required: true
+      project-path:
+        type: string
+        required: true
+      dockerfile-path:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+      run-prisma-gate-check:
+        type: string
+        required: true
+        default: "no"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+
+jobs:
+  # # # ------------------------
+  # # # Repository Contribution Compliance Gate
+  # # # ------------------------
+  Repository-Contribution-Compliance:
+    name: Repository Compliance Gate
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
+    with:
+      base_branch: ${{ inputs.base-branch }}
+      jira_prefix: ${{ inputs.jira-prefix }}
+  
+  # # # # ------------------------
+  # # # # Code Scan (Codeql)
+  # # # # ------------------------
+  Codeql-scan:
+    name: CodeQL Scan & Quality Gate
+    needs: Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/codeql-template.yml@main
+    with:
+      language: ${{ inputs.app-language }}
+      projectPath: ${{ inputs.projectPath }}
+      buildCommand: ${{ inputs.buildCommand }}
+      run-codeql-gate-check: ${{ inputs.run-codeql-gate-check }}
+    secrets: inherit
+  
+  # # # # ------------------------
+  # # # # Veracode
+  # # # # ------------------------
+  Veracode-scan:
+    name: Veracode SAST & Quality Gate
+    needs: Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/veracode-baseline-scan-template.yml@main
+    with:
+      run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
+    secrets: inherit
+
+  # # # # ------------------------
+  # # # # Sonarqube scan
+  # # # # ------------------------
+  Sonarqube-scan:
+    name: Sonar Code Coverage & Quality Gate
+    needs:  Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/sonarqube-template-m.yml@Feature-Deployment
+    with:
+      projectKey: ${{ inputs.projectKey }}
+      organizationKey: ${{ inputs.organizationKey }}
+      projectSlnPath: ${{ inputs.projectSlnPath }}
+      testProjectPath: ${{ inputs.testProjectPath }}
+      language: ${{ inputs.language }}
+      language-version: ${{ inputs.language-version }}
+      run-sonarqube-gate-check: ${{ inputs.run-sonarqube-gate-check }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # # # ------------------------
+  # # # CI Stage (Build Image and Push to ECR)
+  # # # ------------------------
+  ci:
+    name: Build & Push Image to ECR
+    needs: [Sonarqube-scan, Veracode-scan, Codeql-scan]
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/docker-build-push.yml@Feature-Deployment
+    with:
+      app-language: ${{ inputs.app-language }}
+      project-path: ${{ inputs.project-path }}
+      dockerfile-path: ${{ inputs.dockerfile-path }}
+      language-version: ${{ inputs.language-version }}
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  # # # # ------------------------
+  # # # # Prisma-Image-scan
+  # # # # ------------------------
+  Prisma-Image-scan:
+    name: Prisma Image Scan & Quality Gate
+    needs: ci
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/prisma-scan-template.yml@Feature-Deployment
+    with:
+      run-prisma-gate-check: ${{ inputs.run-prisma-gate-check }}
+    secrets: inherit
+
+  # ------------------------
+  # Deploy to Dev (auto) ECS Task + Service
+  # ------------------------
+  ecs-deploy-dev:
+    needs: [ci, Prisma-Image-scan]
+    name: Deploy to Dev
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ecs-deployment-templatemanifest.yml@Feature-Deployment
+    with:
+      environment: ${{ inputs.environment }}
+      app-language: ${{ inputs.app-language }}
+      image-tag: ${{ needs.ci.outputs.IMAGE_TAG }}
+    secrets: inherit
+
+  Switch-Traffic:
+    needs: ecs-deploy-dev
+    name: Switch Traffic to Live
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/manual-promotion.yml@Feature-Deployment
+    with:
+      environment: ${{ inputs.environment }}
+      temp-listener-arn: ${{ needs.ecs-deploy-dev.outputs.TEMP_LISTENER_ARN }}
+      idle-tg: ${{ needs.ecs-deploy-dev.outputs.IDLE_TG }}
+      idle-service: ${{ needs.ecs-deploy-dev.outputs.IDLE_SERVICE }}
+      is-first-deploy: ${{ fromJSON(needs.ecs-deploy-dev.outputs.IS_FIRST_DEPLOY) }}
+      live-service: ${{ needs.ecs-deploy-dev.outputs.LIVE_SERVICE}}
+      main-alb-listener-arn: ${{ needs.ecs-deploy-dev.outputs.MAIN_ALB_LISTENER_ARN }}
+    secrets: inherit
