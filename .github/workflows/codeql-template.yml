@@ -7,6 +7,7 @@ on:
         description: "Programming language to scan (csharp, java, javascript, python, go, cpp, ruby)"
         required: true
         type: string
+        default: "javascript"
       projectPath:
         description: "Project path for build (required for .NET or multi-project builds)"
         required: false
