@@ -43,6 +43,7 @@ on:
 
 jobs:
   ecs-deploy:
+    name: ECS Deploy to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment }}

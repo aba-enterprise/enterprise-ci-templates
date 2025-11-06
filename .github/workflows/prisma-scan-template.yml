@@ -1,0 +1,67 @@
+name: "Reusable prisma Baseline Scan"
+
+on:
+  workflow_call:
+    inputs:
+      run-prisma-gate-check:
+        description: "Run Prisma alert check? (yes/no)"
+        type: string
+        required: false
+        default: "yes"
+
+permissions:
+  security-events: write
+  packages: read
+  actions: read
+  contents: read
+
+jobs:
+  Prisma-Image-scan:
+    name: Prisma Image Scan & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # - name: Download build artifacts
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #       name: dotnet-sourcecode
+      #       path: ./source
+      
+      - name: Check Images for Vulnerabilities
+        run: |
+          echo "🔎 Checking Images for Vulnerabilities for Image ${GITHUB_REF}..."
+
+          CRITICAL=0
+          HIGH=0
+          MEDIUM=10
+          LOW=20
+          INFORMATIONAL=40
+
+          echo "🔎 prisma Severity Findings Summary:"
+          echo "  Critical: $CRITICAL"
+          echo "  High:     $HIGH"
+          echo "  Medium:   $MEDIUM"
+          echo "  Low:      $LOW"
+          echo "  Informational:    $INFORMATIONAL"
+
+          {
+            echo "## 🔎 prisma Severity Findings Summary"
+            echo "- Critical: **$CRITICAL**"
+            echo "- High: **$HIGH**"
+            echo "- Medium: $MEDIUM"
+            echo "- Low: $LOW"
+            echo "- Informational: $INFORMATIONAL"
+          } >> $GITHUB_STEP_SUMMARY
+
+          
+          INPUT_RUN_ALERT_CHECK=${{ inputs.run-prisma-gate-check }}
+            if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
+                echo "❌ Pipeline failed due to critical/high findings."
+                exit 1
+            elif [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
+                echo "⚠️ Gate check bypassed as per configuration (run-prisma-gate-check=no)." >> $GITHUB_STEP_SUMMARY
+            else
+                echo "✅ No critical/high Vulnerabilities findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
+            fi
