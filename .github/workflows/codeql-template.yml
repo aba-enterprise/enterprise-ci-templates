@@ -51,6 +51,12 @@ jobs:
       - name: Build project (if needed)
         if: ${{ inputs.buildCommand != '' }}
         run: ${{ inputs.buildCommand }}
+      
+      # ⚠️ Warn if build skipped for build-required language
+      - name: Warn if build skipped for build-required language
+        if: ${{ (inputs.language == 'csharp' || inputs.language == 'java' || inputs.language == 'cpp') && inputs.buildCommand == '' }}
+        run: |
+          echo "::warning::⚠️ No buildCommand provided for ${{ inputs.language }}. CodeQL results may be incomplete."
 
       # 5️⃣ Run CodeQL analysis
       - name: Perform CodeQL Analysis
