@@ -68,25 +68,6 @@ on:
         required: true
       SONAR_HOST_URL:
         required: true
-  push:
-    branches:
-      - Feature-*
-      - feature-*
-      - main
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-    branches:
-      - main
-      - integration
-      - develop
-      - Feature-Test
-
-permissions:
-  security-events: write
-  actions: read
-  contents: read
-  packages: write
-  id-token: write
 
 jobs:
   # # # ------------------------
