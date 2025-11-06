@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   baseline:
-    name: Baseline Scan
+    name: Veracode Baseline Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -23,6 +23,7 @@ on:
 
 jobs:
   codeql-scan:
+    name: CodeQL Scan & Quality Gate
     runs-on: ubuntu-latest
     permissions:
       actions: read

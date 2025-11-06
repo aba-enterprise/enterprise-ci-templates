@@ -21,7 +21,8 @@ on:
         default: "[A-Z]+"
 
 jobs:
-  compliance-check:
+  Repository-Compliance:
+    name: Repository Compliance Gate
     runs-on: ubuntu-latest
     steps:
       # 1️⃣ Checkout repository
