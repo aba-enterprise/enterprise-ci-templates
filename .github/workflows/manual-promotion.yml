@@ -23,6 +23,10 @@ on:
         description: "Temporary listener ARN (if created during deployment)"
         required: false
         type: string
+      main-alb-listener-arn:
+        description: "Main listener ARN"
+        required: false
+        type: string
       is-first-deploy:
         description: "Flag to indicate first deployment"
         required: true
@@ -70,10 +74,22 @@ jobs:
       - name: Flip Traffic to New Version
         if: ${{ inputs.is-first-deploy == false }}  # Skip first deployment
         run: |
+          # echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
+          # aws elbv2 modify-listener \
+          #   --listener-arn "${{ vars.MAIN_ALB_LISTENER_ARN }}" \
+          #   --default-actions '[{"Type":"forward","TargetGroupArn":"'"${{ inputs.idle-tg }}"'"}]'
+          # echo "✅ Traffic successfully flipped to ${{ inputs.idle-service }}"
+
           echo "Flipping traffic to idle service: ${{ inputs.idle-service }}..."
+          LISTENER_ARN="${{ inputs.main-alb-listener-arn }}"
+          TARGET_GROUP_ARN="${{ inputs.idle-tg }}"
+          if [ -z "$LISTENER_ARN" ] || [ -z "$TARGET_GROUP_ARN" ]; then
+            echo "❌ Listener ARN or Target Group ARN is empty!"
+            exit 1
+          fi
           aws elbv2 modify-listener \
-            --listener-arn "${{ vars.MAIN_ALB_LISTENER_ARN }}" \
-            --default-actions '[{"Type":"forward","TargetGroupArn":"'"${{ inputs.idle-tg }}"'"}]'
+            --listener-arn "$LISTENER_ARN" \
+            --default-actions "Type=forward,TargetGroupArn=$TARGET_GROUP_ARN"
           echo "✅ Traffic successfully flipped to ${{ inputs.idle-service }}"
 
       # 3️⃣ Remove temporary listener if exists

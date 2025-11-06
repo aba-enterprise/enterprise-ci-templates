@@ -33,6 +33,8 @@ on:
         value: ${{ jobs.ecs-deploy.outputs.TEMP_LISTENER_ARN }}
       IS_FIRST_DEPLOY: 
         value: ${{ jobs.ecs-deploy.outputs.IS_FIRST_DEPLOY }}
+      MAIN_ALB_LISTENER_ARN:
+        value: ${{ jobs.ecs-deploy.outputs.MAIN_ALB_LISTENER_ARN }}
 
 jobs:
   ecs-deploy:
@@ -46,6 +48,7 @@ jobs:
       IDLE_SERVICE: ${{ steps.set-services.outputs.IDLE_SERVICE }}
       IDLE_TG: ${{ steps.set-services.outputs.IDLE_TG }}
       TEMP_LISTENER_ARN: ${{ steps.app_endpoint_test.outputs.TEMP_LISTENER_ARN }}
+      MAIN_ALB_LISTENER_ARN: ${{ steps.app_endpoint_test.outputs.MAIN_ALB_LISTENER_ARN }}
       IS_FIRST_DEPLOY: ${{ steps.set-services.outputs.IS_FIRST_DEPLOY }}
 
     steps:
@@ -377,6 +380,7 @@ jobs:
           echo "🔗 Testing Application Endpoint: $TEST_URL"
           echo "TEMP_LISTENER_ARN=$TEMP_LISTENER_ARN" >> $GITHUB_OUTPUT
           echo "TEST_URL=$TEST_URL" >> $GITHUB_OUTPUT
+          echo "MAIN_ALB_LISTENER_ARN=$ALB_LISTENER_ARN" >> $GITHUB_OUTPUT
 
       #  🧹 Cleanup old ECS task definitions (keep last 5, skip active ones)
       - name: Cleanup old ECS Task Definitions
