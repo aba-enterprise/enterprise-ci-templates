@@ -5,21 +5,21 @@ on:
     inputs:
       base-branch:
         type: string
-        required: true
+        required: false
         default: "main"
       jira-prefix:
         type: string
-        required: true
+        required: false
         default: "SCRUM|PROJ|scrum|proj"
       language:
         type: string
         required: true
       projectPath:
         type: string
-        required: true
+        required: false
       buildCommand:
         type: string
-        required: true
+        required: false
       run-codeql-gate-check:
         type: string
         required: true
