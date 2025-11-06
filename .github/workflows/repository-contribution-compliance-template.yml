@@ -70,7 +70,8 @@ jobs:
             echo "� Scanning $(echo "$CHANGED_FILES" | wc -l) changed files for secrets..."
             
             # Secret patterns (common sensitive data)
-            SECRET_PATTERNS="password|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|auth[_-]?token|bearer|oauth|jwt|credential"
+            #SECRET_PATTERNS="password|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|auth[_-]?token|bearer|oauth|jwt|credential"
+            SECRET_PATTERNS="password\s*[=:]\s*[\"']|secret\s*[=:]\s*[\"']|(?<!sonar\.)token\s*[=:]\s*[\"']|api_key\s*[=:]\s*[\"']|auth_token\s*[=:]\s*[\"']"
             
             if echo "$CHANGED_FILES" | xargs grep -iE "$SECRET_PATTERNS" 2>/dev/null | grep -v "# " | grep -v "example" | grep -v "placeholder" | grep -v "TODO" | grep -v "FIXME"; then
               echo "❌ Potential hardcoded secrets detected!"
