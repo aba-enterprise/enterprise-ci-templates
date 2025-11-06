@@ -69,6 +69,7 @@ jobs:
           echo "IDLE_SERVICE=${{ inputs.idle-service }}"
           echo "FirstTimneDeployment=${{ inputs.is-first-deploy}}"
           echo "TemporaryListener=${{ inputs.temp-listener-arn}}"
+          echo "MainAlbListenerArn=${{ inputs.main-alb-listener-arn}}"
 
       # 2️⃣ Flip Traffic to New Version
       - name: Flip Traffic to New Version
