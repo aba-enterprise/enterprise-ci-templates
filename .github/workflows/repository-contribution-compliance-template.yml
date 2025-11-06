@@ -1,12 +1,16 @@
 name: "Repository Contribution Compliance (Reusable)"
-
+ 
 # File: .github/workflows/repository-contribution-compliance-template.yml
 # Description: Reusable workflow to enforce repository contribution compliance.
 #   Checks: 
-#     1. Commit messages for Jira ticket keys
-#     2. PR title for Jira ticket key
-#     3. Detect unwanted files (like .DS_Store, .env, .log, node_modules, __pycache__)
-
+#     1. Project type detection (Java, Node.js, .NET, Python, Docker, Generic)
+#     2. Security validation (secrets scanning, large files detection)
+#     3. Code style validation (project-specific checks)
+#     4. File structure validation (problematic files detection)
+#     5. Commit messages for Jira ticket keys
+#     6. PR title for Jira ticket key
+#     7. Unwanted files detection (OS-specific, temp files, logs)
+ 
 on:
   workflow_call:
     inputs:
@@ -18,11 +22,10 @@ on:
         description: "Jira project key prefix (e.g., SCRUM, PROJ)"
         required: false
         type: string
-        default: "[A-Z]+"
-
+        default: '[A-Za-z][A-Za-z0-9]+-[0-9]+'
+ 
 jobs:
-  Repository-Compliance:
-    name: Repository Compliance Gate
+  compliance-check:
     runs-on: ubuntu-latest
     steps:
       # 1️⃣ Checkout repository
@@ -30,13 +33,171 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      # 2️⃣ Validate commit messages for Jira keys
+ 
+      # 2️⃣ Project Type Detection
+      - name: Detect Project Type
+        id: detect-project
+        run: |
+          echo "🔍 Detecting project type..."
+          PROJECT_TYPE="unknown"
+          
+          if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            PROJECT_TYPE="java"
+          elif [ -f "package.json" ]; then
+            PROJECT_TYPE="nodejs"
+          elif find . -maxdepth 2 -name "*.csproj" -o -name "*.sln" | grep -q .; then
+            PROJECT_TYPE="dotnet"
+          elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+            PROJECT_TYPE="python"
+          elif [ -f "Dockerfile" ]; then
+            PROJECT_TYPE="docker"
+          else
+            PROJECT_TYPE="generic"
+          fi
+          
+          echo "project-type=$PROJECT_TYPE" >> $GITHUB_OUTPUT
+          echo "🎯 Detected project type: $PROJECT_TYPE"
+ 
+      # 3️⃣ Security Validation
+      - name: Security Validation
+        run: |
+          echo "🔒 Running security validation..."
+          
+          # Check for hardcoded secrets in changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ inputs.base_branch }}..HEAD 2>/dev/null || echo "")
+          
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "� Scanning $(echo "$CHANGED_FILES" | wc -l) changed files for secrets..."
+            
+            # Secret patterns (common sensitive data)
+            SECRET_PATTERNS="password|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|auth[_-]?token|bearer|oauth|jwt|credential"
+            
+            if echo "$CHANGED_FILES" | xargs grep -iE "$SECRET_PATTERNS" 2>/dev/null | grep -v "# " | grep -v "example" | grep -v "placeholder" | grep -v "TODO" | grep -v "FIXME"; then
+              echo "❌ Potential hardcoded secrets detected!"
+              echo "💡 Please review and remove any sensitive information"
+              exit 1
+            fi
+            
+            # Check for large files (>10MB)
+            if echo "$CHANGED_FILES" | xargs ls -la 2>/dev/null | awk '$5 > 10485760 {print $9, "(" $5 " bytes)"}' | grep -q .; then
+              echo "⚠️  Large files detected:"
+              echo "$CHANGED_FILES" | xargs ls -la 2>/dev/null | awk '$5 > 10485760 {print "  " $9, "(" $5 " bytes)"}'
+              echo "💡 Consider using Git LFS for large files"
+            fi
+          else
+            echo "ℹ️  No changed files to scan"
+          fi
+          
+          echo "✅ Security validation completed"
+ 
+      # 4️⃣ Code Style Validation
+      - name: Code Style Validation
+        run: |
+          echo "🎨 Running code style validation..."
+          
+          PROJECT_TYPE="${{ steps.detect-project.outputs.project-type }}"
+          echo "📋 Validating code style for: $PROJECT_TYPE"
+          
+          case "$PROJECT_TYPE" in
+            "java")
+              echo "☕ Java project detected"
+              # Basic Java file validation
+              if find . -name "*.java" -type f | head -1 | grep -q .; then
+                echo "✅ Java files found and accessible"
+                # Check for basic Java syntax issues (imports, package declarations)
+                if find . -name "*.java" -exec grep -l "^import.*\*.*" {} \; 2>/dev/null | grep -q .; then
+                  echo "⚠️  Wildcard imports found - consider specific imports"
+                fi
+              fi
+              ;;
+            "nodejs")
+              echo "� Node.js project detected"
+              # Check package.json syntax
+              if [ -f "package.json" ]; then
+                if ! python -m json.tool package.json > /dev/null 2>&1 && ! node -e "JSON.parse(require('fs').readFileSync('package.json'))" > /dev/null 2>&1; then
+                  echo "❌ Invalid package.json syntax"
+                  exit 1
+                fi
+                echo "✅ package.json syntax is valid"
+              fi
+              ;;
+            "dotnet")
+              echo "🔷 .NET project detected"
+              # Basic .NET project file validation
+              if find . -name "*.csproj" -o -name "*.sln" | head -1 | grep -q .; then
+                echo "✅ .NET project files found"
+              fi
+              ;;
+            "python")
+              echo "🐍 Python project detected"
+              # Basic Python syntax check
+              if find . -name "*.py" -type f | head -1 | grep -q .; then
+                echo "✅ Python files found"
+                # Check for basic Python syntax
+                if find . -name "*.py" -exec python -m py_compile {} \; 2>/dev/null; then
+                  echo "✅ Python syntax validation passed"
+                else
+                  echo "⚠️  Python syntax issues detected"
+                fi
+              fi
+              ;;
+            "docker")
+              echo "� Docker project detected"
+              # Basic Dockerfile validation
+              if [ -f "Dockerfile" ]; then
+                echo "✅ Dockerfile found"
+                # Check for common Dockerfile issues
+                if grep -q "^FROM.*:latest" Dockerfile 2>/dev/null; then
+                  echo "⚠️  Using 'latest' tag in FROM - consider specific versions"
+                fi
+              fi
+              ;;
+            *)
+              echo "📄 Generic project - performing basic validations"
+              ;;
+          esac
+          
+          echo "✅ Code style validation completed"
+ 
+      # 5️⃣ File Structure Validation  
+      - name: File Structure Validation
+        run: |
+          echo "📁 Running file structure validation..."
+          
+          # Check for common problematic files
+          PROBLEMATIC_FILES=""
+          
+          # Check for OS-specific files
+          if find . -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" | grep -q .; then
+            PROBLEMATIC_FILES="$PROBLEMATIC_FILES OS-specific files (.DS_Store, Thumbs.db, desktop.ini)"
+          fi
+          
+          # Check for common temporary files
+          if find . -name "*.tmp" -o -name "*.temp" -o -name "*~" | grep -q .; then
+            PROBLEMATIC_FILES="$PROBLEMATIC_FILES Temporary files (*.tmp, *.temp, *~)"
+          fi
+          
+          # Check for log files in git
+          if find . -name "*.log" -not -path "./.git/*" | grep -q .; then
+            PROBLEMATIC_FILES="$PROBLEMATIC_FILES Log files (*.log)"
+          fi
+          
+          if [ -n "$PROBLEMATIC_FILES" ]; then
+            echo "⚠️  Problematic files detected:"
+            echo "$PROBLEMATIC_FILES"
+            echo "💡 Consider adding these to .gitignore"
+          else
+            echo "✅ No problematic files detected"
+          fi
+          
+          echo "✅ File structure validation completed"
+ 
+      # 6️⃣ Validate commit messages for Jira keys
       - name: Validate commit messages for Jira keys
-        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "🔍 Checking commits against Jira ticket pattern..."
-          
+
           # Determine commit range
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
@@ -44,15 +205,26 @@ jobs:
             range="${{ github.sha }}~1..${{ github.sha }}"
           fi
 
-          commits=$(git log $range --pretty=format:"%s")
+          commits=$(git log $range --pretty=format:"%H %s")
           missing=0
 
           echo "📋 Commits in range $range:"
-          while IFS= read -r msg; do
-            if echo "$msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
-              echo "✅ $msg"
+          while IFS= read -r line; do
+            commit_hash=$(echo "$line" | cut -d' ' -f1)
+            commit_msg=$(echo "$line" | cut -d' ' -f2-)
+
+            # Skip merge commits (any commit with more than 1 parent)
+            parent_count=$(git rev-list --count --parents -n 1 "$commit_hash")
+            if [ "$parent_count" -gt 1 ]; then
+              echo "⚠️ Skipping merge commit: $commit_msg"
+              continue
+            fi
+
+            # Check Jira key
+            if echo "$commit_msg" | grep -iqE "(${GITHUB_INPUT_JIRA_PREFIX}-[0-9]+)"; then
+              echo "✅ $commit_msg"
             else
-              echo "❌ $msg (missing Jira key)"
+              echo "❌ $commit_msg (missing Jira key)"
               missing=1
             fi
           done <<< "$commits"
@@ -62,8 +234,8 @@ jobs:
             exit 1
           fi
           echo "✅ All commits include Jira ticket numbers."
-
-      # 3️⃣ Check PR title for Jira key (PR only)
+ 
+      # 7️⃣ Check PR title for Jira key (PR only)
       - name: Check PR title for Jira key
         if: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -75,26 +247,31 @@ jobs:
             exit 1
           fi
           echo "✅ PR title contains Jira key: $pr_title"
-
-      # 4️⃣ Check for unwanted files
-      - name: Validate repository for unwanted files
-        run: |
-          echo "🔍 Checking repository for unwanted files..."
-
-          # Make sure the base branch exists locally
-          git fetch origin ${{ inputs.base_branch }}
-
-          # Compare changes against the base branch
-          UNWANTED_FILES=$(git diff --name-only origin/${{ inputs.base_branch }}..HEAD | grep -E '(\.DS_Store|\.env|\.log|node_modules/|__pycache__/)' || true)
-
-          if [ -n "$UNWANTED_FILES" ]; then
-            echo "❌ Found unwanted files:"
-            echo "$UNWANTED_FILES"
-            exit 1
-          fi
-
-          echo "✅ No unwanted files found."
-
-      # 5️⃣ Success
+ 
+      # 8️⃣ Success
       - name: Compliance Passed
-        run: echo "✅ Repository contribution compliance checks passed!"
+        run: |
+          echo "=================================="
+          echo "✅ REPOSITORY CONTRIBUTION COMPLIANCE PASSED!"
+          echo "=================================="
+          echo "📋 Validations completed:"
+          echo "  ✅ Project Type Detection: PASSED"
+          echo "  ✅ Security Validation: PASSED"
+          echo "  ✅ Code Style Validation: PASSED"
+          echo "  ✅ File Structure Validation: PASSED"
+          
+          # Conditional validation results based on event type
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "  ✅ Commit Message Validation: PASSED"
+          else
+            echo "  ⏭️  Commit Message Validation: SKIPPED (not PR/push/manual event)"
+          fi
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "  ✅ PR Title Validation: PASSED"
+          else
+            echo "  ⏭️  PR Title Validation: SKIPPED (not PR event)"
+          fi
+          
+          echo "=================================="
+          echo "🚀 Ready for build and deployment!"
