@@ -153,8 +153,13 @@ jobs:
             echo "Active Service: $LIVE_SERVICE, Idle Service: $IDLE_SERVICE , Is First Time Deployment: $IS_FIRST_DEPLOY"
             exit 0
           fi
+          # ACTIVE_TG=$(aws elbv2 describe-listeners \
+          #     --load-balancer-arn "$ALB_ARN" \
+          #     --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+          #     --output text)
+
           ACTIVE_TG=$(aws elbv2 describe-listeners \
-              --load-balancer-arn "$ALB_ARN" \
+              --listener-arns "$ALB_LISTENER_ARN" \
               --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
               --output text)
 
