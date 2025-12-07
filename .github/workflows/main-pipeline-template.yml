@@ -156,7 +156,7 @@ jobs:
   ecs-deploy-dev:
     needs: [ci, Prisma-Image-scan]
     name: Deploy to Dev
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ecs-deployment-templatemanifest.yml@main
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ecs-deployment-templatemanifest.yml@Feature-Mp
     with:
       environment: ${{ inputs.environment }}
       app-language: ${{ inputs.app-language }}
