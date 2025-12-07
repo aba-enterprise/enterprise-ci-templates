@@ -233,6 +233,7 @@ jobs:
             "family": "$TASK_FAMILY",
             "networkMode": "awsvpc",
             "executionRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/$EXECUTION_ROLE_NAME",
+            "taskRoleArn": "arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/ecs-vault-task-role",
             "containerDefinitions": [
               {
                 "name": "$CONTAINER_NAME",
