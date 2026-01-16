@@ -17,10 +17,19 @@ on:
         required: false
         default: "staging"
         type: string
-      test_id:
-        description: "Existing BlazeMeter Test ID (optional for updating existing tests)"
-        required: false
+      project_name:
+        description: "BlazeMeter Project name"
+        required: true
         type: string
+      workspace_name:
+        description: "BlazeMeter Workspace name"
+        required: true
+        type: string
+      test_name:
+        description: "BlazeMeter Test name (unique per run)"
+        required: true
+        type: string
+
     secrets:
       BLAZEMETER_API_KEY:
         required: true
@@ -29,13 +38,19 @@ on:
 
 jobs:
   taurus-test:
-    name: Run Taurus (${{ inputs.language }})
+    name: Run Taurus Performance Test
     runs-on: ubuntu-latest
+
+    env:
+      BZM_PROJECT_NAME: ${{ inputs.project_name }}
+      BZM_WORKSPACE_NAME: ${{ inputs.workspace_name }}
+      BZM_TEST_NAME: ${{ inputs.test_name }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Setup Runtime based on the language required by the Taurus executor
+      # Runtime setup
       - name: Setup Java
         if: inputs.language == 'java'
         uses: actions/setup-java@v4
@@ -61,41 +76,33 @@ jobs:
         with:
           node-version: '20'
 
-      # Execute BlazeMeter Action
+      # BlazeMeter Taurus execution (NEW TEST ALWAYS)
       - name: BlazeMeter Taurus Execution
         id: bzm-action
         uses: BlazeRunner-BZR/Github-Action@v8.1
         with:
           apiKey: ${{ secrets.BLAZEMETER_API_KEY }}
           apiSecret: ${{ secrets.BLAZEMETER_API_SECRET }}
-          testID: ${{ inputs.test_id }}
           inputStartFile: ${{ inputs.taurus_config }}
           continuePipeline: "false"
           showTailLog: "true"
 
-      # Generate Enterprise Job Summary
+      # Enterprise Job Summary
       - name: Publish Test Summary
         if: always()
         run: |
-          STATUS="${{ steps.bzm-action.outcome }}"
-          REPORT_URL="${{ steps.bzm-action.outputs.reportUrl }}"
-          TEST_ID="${{ steps.bzm-action.outputs.testId }}"
-
           echo "## 📊 BlazeMeter Performance Results" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | $STATUS |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Language** | ${{ inputs.language }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ steps.bzm-action.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Project** | $BZM_PROJECT_NAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workspace** | $BZM_WORKSPACE_NAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test Name** | $BZM_TEST_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Taurus Config** | \`${{ inputs.taurus_config }}\` |" >> $GITHUB_STEP_SUMMARY
-          if [ -n "$TEST_ID" ]; then
-            echo "| **BlazeMeter Test ID** | $TEST_ID |" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ -n "$REPORT_URL" ]; then
-            echo "| **BlazeMeter Report** | [View Report]($REPORT_URL) |" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| **BlazeMeter Report** | [View Report](${{ steps.bzm-action.outputs.reportUrl }}) |" >> $GITHUB_STEP_SUMMARY
 
-      # Upload Taurus Artifacts
+      # Upload artifacts
       - name: Upload Taurus Artifacts
         if: always()
         uses: actions/upload-artifact@v4
