@@ -67,6 +67,10 @@ on:
       SONAR_TOKEN:
         required: true
       SONAR_HOST_URL:
+        required: true 
+      BLAZEMETER_API_KEY:
+        required: true
+      BLAZEMETER_API_SECRET:
         required: true
 
 jobs:
@@ -176,6 +180,9 @@ jobs:
       project_name: "DotNet-Sample-App"
       workspace_name: "Dev Performance"
       test_name: "CI-${{ github.run_number }}-Dev"
+    secrets:
+        BLAZEMETER_API_KEY: ${{ secrets.BLAZEMETER_API_KEY }}
+        BLAZEMETER_API_SECRET: ${{ secrets.BLAZEMETER_API_SECRET }}
 
 
   Switch-Traffic:
