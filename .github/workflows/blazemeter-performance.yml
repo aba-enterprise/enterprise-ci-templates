@@ -97,6 +97,9 @@ jobs:
           showTailLog: "true"
           createTest: "true"
           projectID: ${{ inputs.project_id }}
+          testName: ${{ inputs.test_name }}
+          workSpace: ${{ inputs.workspace_name }}
+          
       # -------------------------
       # Enterprise Job Summary
       # -------------------------
