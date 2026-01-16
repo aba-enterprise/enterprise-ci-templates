@@ -91,6 +91,7 @@ jobs:
           inputStartFile: ${{ inputs.taurus_config }}
           continuePipeline: "false"
           showTailLog: "true"
+          createTest: "true"
 
       # -------------------------
       # Enterprise Job Summary
