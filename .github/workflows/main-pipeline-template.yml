@@ -164,6 +164,20 @@ jobs:
       image-tag: ${{ needs.ci.outputs.IMAGE_TAG }}
     secrets: inherit
 
+  #------------------------------------
+  # Blazemeter performance Testing 
+  #----------------------------------------
+  Taurus-Performance-Test:
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/Blazemeter-performance.yml@Feature-Mp
+    with:
+      taurus_config: performance.yaml"
+      language: "dotnet"
+      environment: "dev"
+      project_name: "DotNet-Sample-App"
+      workspace_name: "Dev Performance"
+      test_name: "CI-${{ github.run_number }}-Dev"
+
+
   Switch-Traffic:
     needs: ecs-deploy-dev
     name: Switch Traffic to Live
