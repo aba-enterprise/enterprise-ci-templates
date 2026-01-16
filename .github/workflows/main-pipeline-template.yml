@@ -172,7 +172,7 @@ jobs:
   # Blazemeter performance Testing 
   #----------------------------------------
   Taurus-Performance-Test:
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/Blazemeter-performance.yml@Feature-Mp
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/blazemeter-performance.yml@Feature-Mp
     with:
       taurus_config: performance.yaml"
       language: "dotnet"
