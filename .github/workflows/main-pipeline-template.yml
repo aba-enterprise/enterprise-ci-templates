@@ -182,8 +182,8 @@ jobs:
       workspace_name: Dev-Performance
       test_name: "${{ github.repository }}-dev-${{ github.run_number }}"
     secrets: 
-      BLAZEMETER_API_KEY: ${{ BLAZEMETER_API_KEY }}
-      BLAZEMETER_API_SECRET: ${{ BLAZEMETER_API_SECRET }}
+      BLAZEMETER_API_KEY: ${{ secrets.BLAZEMETER_API_KEY }}
+      BLAZEMETER_API_SECRET: ${{ secrets.BLAZEMETER_API_SECRET }}
 
 
   Switch-Traffic:
