@@ -172,7 +172,7 @@ jobs:
   # Blazemeter performance Testing 
   #----------------------------------------
   Taurus-Performance-Test:
-    needs: ecs-deploy-dev
+    needs: [ci]
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/blazemeter-performance.yml@main
     with:
       taurus_config: performance.yaml
@@ -181,7 +181,9 @@ jobs:
       project_name: Sample-dotnet-app
       workspace_name: Dev-Performance
       test_name: "${{ github.repository }}-dev-${{ github.run_number }}"
-    secrets: inherit
+    secrets: 
+      BLAZEMETER_API_KEY: ${{ BLAZEMETER_API_KEY }}
+      BLAZEMETER_API_SECRET: ${{ BLAZEMETER_API_SECRET }}
 
 
   Switch-Traffic:
