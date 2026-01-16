@@ -29,6 +29,10 @@ on:
         description: "BlazeMeter Test name (usually repo-based, unique per run)"
         required: true
         type: string
+      project_id:
+        description: "BlazeMeter Project ID"
+        required: true
+        type: string
 
     secrets:
       BLAZEMETER_API_KEY:
@@ -92,7 +96,7 @@ jobs:
           continuePipeline: "false"
           showTailLog: "true"
           createTest: "true"
-
+          projectID: ${{ inputs.project_id }}
       # -------------------------
       # Enterprise Job Summary
       # -------------------------
