@@ -179,6 +179,7 @@ jobs:
       language: dotnet
       environment: dev
       project_name: Sample-dotnet-app
+      project_id: 2583642
       workspace_name: Dev-Performance
       test_name: "${{ github.repository }}-dev-${{ github.run_number }}"
     secrets: 
