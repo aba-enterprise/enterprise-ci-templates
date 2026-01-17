@@ -172,7 +172,7 @@ jobs:
   # Blazemeter performance Testing 
   #----------------------------------------
   Taurus-Performance-Test:
-    needs: [ci]
+    needs: ecs-deploy-dev
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/blazemeter-performance.yml@Feature-Mp
     with:
       taurus_config: performance.yaml
