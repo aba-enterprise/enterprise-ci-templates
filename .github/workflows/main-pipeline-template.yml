@@ -77,63 +77,63 @@ jobs:
   # # # ------------------------
   # # # Repository Contribution Compliance Gate
   # # # ------------------------
-  # Repository-Contribution-Compliance:
-  #   name: Repository Compliance Gate
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
-  #   with:
-  #     base_branch: ${{ inputs.base-branch }}
-  #     jira_prefix: ${{ inputs.jira-prefix }}
+  Repository-Contribution-Compliance:
+    name: Repository Compliance Gate
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
+    with:
+      base_branch: ${{ inputs.base-branch }}
+      jira_prefix: ${{ inputs.jira-prefix }}
   
   # # # # # ------------------------
   # # # # # Code Scan (Codeql)
   # # # # # ------------------------
-  # Codeql-scan:
-  #   name: CodeQL Scan & Quality Gate
-  #   needs: Repository-Contribution-Compliance
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/codeql-template.yml@main
-  #   with:
-  #     language: ${{ inputs.app-language }}
-  #     projectPath: ${{ inputs.projectPath }}
-  #     buildCommand: ${{ inputs.buildCommand }}
-  #     run-codeql-gate-check: ${{ inputs.run-codeql-gate-check }}
-  #   secrets: inherit
+  Codeql-scan:
+    name: CodeQL Scan & Quality Gate
+    needs: Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/codeql-template.yml@main
+    with:
+      language: ${{ inputs.app-language }}
+      projectPath: ${{ inputs.projectPath }}
+      buildCommand: ${{ inputs.buildCommand }}
+      run-codeql-gate-check: ${{ inputs.run-codeql-gate-check }}
+    secrets: inherit
   
   # # # # # ------------------------
   # # # # # Veracode
   # # # # # ------------------------
-  # Veracode-scan:
-  #   name: Veracode SAST & Quality Gate
-  #   needs: Repository-Contribution-Compliance
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/veracode-baseline-scan-template.yml@main
-  #   with:
-  #     run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
-  #   secrets: inherit
+  Veracode-scan:
+    name: Veracode SAST & Quality Gate
+    needs: Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/veracode-baseline-scan-template.yml@main
+    with:
+      run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
+    secrets: inherit
 
   # # # # # ------------------------
   # # # # # Sonarqube scan
   # # # # # ------------------------
-  # Sonarqube-scan:
-  #   name: Sonar Code Coverage & Quality Gate
-  #   needs:  Repository-Contribution-Compliance
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/sonarqube-template-m.yml@main
-  #   with:
-  #     projectKey: ${{ inputs.projectKey }}
-  #     organizationKey: ${{ inputs.organizationKey }}
-  #     projectSlnPath: ${{ inputs.projectSlnPath }}
-  #     testProjectPath: ${{ inputs.testProjectPath }}
-  #     language: ${{ inputs.language }}
-  #     language-version: ${{ inputs.language-version }}
-  #     run-sonarqube-gate-check: ${{ inputs.run-sonarqube-gate-check }}
-  #   secrets:
-  #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  Sonarqube-scan:
+    name: Sonar Code Coverage & Quality Gate
+    needs:  Repository-Contribution-Compliance
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/sonarqube-template-m.yml@main
+    with:
+      projectKey: ${{ inputs.projectKey }}
+      organizationKey: ${{ inputs.organizationKey }}
+      projectSlnPath: ${{ inputs.projectSlnPath }}
+      testProjectPath: ${{ inputs.testProjectPath }}
+      language: ${{ inputs.language }}
+      language-version: ${{ inputs.language-version }}
+      run-sonarqube-gate-check: ${{ inputs.run-sonarqube-gate-check }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   # # # ------------------------
   # # # CI Stage (Build Image and Push to ECR)
   # # # ------------------------
   ci:
     name: Build & Push Image to ECR
-    # needs: [Sonarqube-scan, Veracode-scan, Codeql-scan]
+    needs: [Sonarqube-scan, Veracode-scan, Codeql-scan]
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/docker-build-push.yml@main
     with:
       app-language: ${{ inputs.app-language }}
@@ -146,20 +146,20 @@ jobs:
   # # # # ------------------------
   # # # # Prisma-Image-scan
   # # # # ------------------------
-  # Prisma-Image-scan:
-  #   name: Prisma Image Scan & Quality Gate
-  #   needs: ci
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/prisma-scan-template.yml@main
-  #   with:
-  #     run-prisma-gate-check: ${{ inputs.run-prisma-gate-check }}
-  #   secrets: inherit
+  Prisma-Image-scan:
+    name: Prisma Image Scan & Quality Gate
+    needs: ci
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/prisma-scan-template.yml@main
+    with:
+      run-prisma-gate-check: ${{ inputs.run-prisma-gate-check }}
+    secrets: inherit
 
   # ------------------------
   # Deploy to Dev (auto) ECS Task + Service
   # ------------------------
   ecs-deploy-dev:
-    needs: [ci]
-    # needs: [ci, Prisma-Image-scan]
+    # needs: [ci]
+    needs: [ci, Prisma-Image-scan]
     name: Deploy to Dev
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ecs-deployment-templatemanifest.yml@Feature-Mp
     with:
@@ -172,7 +172,7 @@ jobs:
   # Blazemeter performance Testing 
   #----------------------------------------
   Taurus-Performance-Test:
-    needs: ecs-deploy-dev
+    needs: Switch-Traffic
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/blazemeter-performance.yml@Feature-Mp
     with:
       taurus_config: performance.yaml
