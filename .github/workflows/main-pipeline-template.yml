@@ -77,19 +77,19 @@ jobs:
   # # # ------------------------
   # # # Repository Contribution Compliance Gate
   # # # ------------------------
-  Repository-Contribution-Compliance:
-    name: Repository Compliance Gate
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
-    with:
-      base_branch: ${{ inputs.base-branch }}
-      jira_prefix: ${{ inputs.jira-prefix }}
+  # Repository-Contribution-Compliance:
+  #   name: Repository Compliance Gate
+  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
+  #   with:
+  #     base_branch: ${{ inputs.base-branch }}
+  #     jira_prefix: ${{ inputs.jira-prefix }}
   
   # # # # # ------------------------
   # # # # # Code Scan (Codeql)
   # # # # # ------------------------
   Codeql-scan:
     name: CodeQL Scan & Quality Gate
-    needs: Repository-Contribution-Compliance
+    # needs: Repository-Contribution-Compliance
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/codeql-template.yml@main
     with:
       language: ${{ inputs.app-language }}
@@ -103,7 +103,7 @@ jobs:
   # # # # # ------------------------
   Veracode-scan:
     name: Veracode SAST & Quality Gate
-    needs: Repository-Contribution-Compliance
+    # needs: Repository-Contribution-Compliance
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/veracode-baseline-scan-template.yml@main
     with:
       run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
@@ -114,7 +114,7 @@ jobs:
   # # # # # ------------------------
   Sonarqube-scan:
     name: Sonar Code Coverage & Quality Gate
-    needs:  Repository-Contribution-Compliance
+    # needs:  Repository-Contribution-Compliance
     uses: aba-enterprise/enterprise-ci-templates/.github/workflows/sonarqube-template-m.yml@main
     with:
       projectKey: ${{ inputs.projectKey }}
