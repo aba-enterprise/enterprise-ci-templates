@@ -116,8 +116,19 @@ jobs:
           echo "| **Environment** | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Taurus Config** | \`${{ inputs.taurus_config }}\` |" >> $GITHUB_STEP_SUMMARY
 
+          # Execution / Report URL
           if [ -n "${{ steps.bzm-action.outputs.reportUrl }}" ]; then
-            echo "| **BlazeMeter Report** | [View Report](${{ steps.bzm-action.outputs.reportUrl }}) |" >> $GITHUB_STEP_SUMMARY
+              echo "| **BlazeMeter Report** | [View Report](${{ steps.bzm-action.outputs.reportUrl }}) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **BlazeMeter Report** | Not Available |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Test Definition URL
+          if [ -n "${{ steps.bzm-action.outputs.testId }}" ]; then
+              TEST_URL="https://a.blazemeter.com/app/#/workspaces/${{ steps.bzm-action.outputs.workspaceId }}/projects/${{ steps.bzm-action.outputs.projectId }}/tests/${{ steps.bzm-action.outputs.testId }}"
+              echo "| **BlazeMeter Test** | [View Test]($TEST_URL) |" >> $GITHUB_STEP_SUMMARY
+          else
+              echo "| **BlazeMeter Test** | Not Available |" >> $GITHUB_STEP_SUMMARY
           fi
 
       # -------------------------
