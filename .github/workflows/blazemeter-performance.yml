@@ -99,6 +99,16 @@ jobs:
           projectID: ${{ inputs.project_id }}
           testName: ${{ inputs.test_name }}
           workSpace: ${{ inputs.workspace_name }}
+
+      # -------------------------
+      # Debug BlazeMeter Outputs (optional, helps fix Not Available)
+      # -------------------------
+      - name: Debug BlazeMeter Outputs
+        run: |
+          echo "reportUrl: ${{ steps.bzm-action.outputs.reportUrl }}"
+          echo "testId: ${{ steps.bzm-action.outputs.testId }}"
+          echo "workspaceId: ${{ steps.bzm-action.outputs.workspaceId }}"
+          echo "projectId: ${{ steps.bzm-action.outputs.projectId }}"
           
       # -------------------------
       # Enterprise Job Summary
@@ -106,30 +116,31 @@ jobs:
       - name: Publish Test Summary
         if: always()
         run: |
+          # Construct BlazeMeter URLs
+          if [ -n "${{ steps.bzm-action.outputs.testId }}" ]; then
+            TEST_URL="https://a.blazemeter.com/app/#/workspaces/${{ steps.bzm-action.outputs.workspaceId }}/projects/${{ steps.bzm-action.outputs.projectId }}/tests/${{ steps.bzm-action.outputs.testId }}"
+            CLICKABLE_TEST_NAME="[${BZM_TEST_NAME}]($TEST_URL)"
+          else
+            CLICKABLE_TEST_NAME="$BZM_TEST_NAME"
+          fi
+
+          if [ -n "${{ steps.bzm-action.outputs.reportUrl }}" ]; then
+            CLICKABLE_REPORT="[View Report](${{ steps.bzm-action.outputs.reportUrl }})"
+          else
+            CLICKABLE_REPORT="Not Available"
+          fi
+
+          # Write summary
           echo "## 📊 BlazeMeter Performance Results" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ${{ steps.bzm-action.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Project** | $BZM_PROJECT_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| **Workspace** | $BZM_WORKSPACE_NAME |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Test Name** | $BZM_TEST_NAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test Name** | $CLICKABLE_TEST_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Taurus Config** | \`${{ inputs.taurus_config }}\` |" >> $GITHUB_STEP_SUMMARY
-
-          # Execution / Report URL
-          if [ -n "${{ steps.bzm-action.outputs.reportUrl }}" ]; then
-              echo "| **BlazeMeter Report** | [View Report](${{ steps.bzm-action.outputs.reportUrl }}) |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| **BlazeMeter Report** | Not Available |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          # Test Definition URL
-          if [ -n "${{ steps.bzm-action.outputs.testId }}" ]; then
-              TEST_URL="https://a.blazemeter.com/app/#/workspaces/${{ steps.bzm-action.outputs.workspaceId }}/projects/${{ steps.bzm-action.outputs.projectId }}/tests/${{ steps.bzm-action.outputs.testId }}"
-              echo "| **BlazeMeter Test** | [View Test]($TEST_URL) |" >> $GITHUB_STEP_SUMMARY
-          else
-              echo "| **BlazeMeter Test** | Not Available |" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| **BlazeMeter Report** | $CLICKABLE_REPORT |" >> $GITHUB_STEP_SUMMARY
 
       # -------------------------
       # Upload Taurus Artifacts
