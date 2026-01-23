@@ -180,6 +180,8 @@ jobs:
       environment: dev
       project_name: Sample-dotnet-app
       project_id: 2583642
+      workspace_id: 2258895
+      account_id: 2180431
       workspace_name: Dev-Performance
       test_name: "${{ github.repository }}-dev-${{ github.run_number }}"
     secrets: 
