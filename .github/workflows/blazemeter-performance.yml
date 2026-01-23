@@ -33,6 +33,12 @@ on:
         description: "BlazeMeter Project ID"
         required: true
         type: string
+      workspace_id:
+        required: true
+        type: string
+      account_id:
+        required: true
+        type: string
 
     secrets:
       BLAZEMETER_API_KEY:
@@ -111,30 +117,62 @@ jobs:
           echo "projectId: ${{ steps.bzm-action.outputs.projectId }}"
           
       # -------------------------
-      # Enterprise Job Summary
+      # Fetch latest master (session) ID
+      # -------------------------
+      - name: Fetch BlazeMeter Master ID
+        id: master
+        if: always()
+        run: |
+          AUTH=$(echo -n "${{ secrets.BLAZEMETER_API_KEY }}:${{ secrets.BLAZEMETER_API_SECRET }}" | base64)
+
+          TEST_ID=$(curl -s \
+            -H "Authorization: Basic $AUTH" \
+            "https://a.blazemeter.com/api/v4/tests?name=${BZM_TEST_NAME}&limit=1" \
+            | jq -r '.result[0].id')
+
+          MASTER_ID=$(curl -s \
+            -H "Authorization: Basic $AUTH" \
+            "https://a.blazemeter.com/api/v4/tests/$TEST_ID/masters?limit=1" \
+            | jq -r '.result[0].id')
+
+          echo "master_id=$MASTER_ID" >> $GITHUB_OUTPUT
+
+      # -------------------------
+      # Generate full PUBLIC URL
+      # -------------------------
+      - name: Generate BlazeMeter Public Report URL
+        id: public
+        if: always()
+        run: |
+          AUTH=$(echo -n "${{ secrets.BLAZEMETER_API_KEY }}:${{ secrets.BLAZEMETER_API_SECRET }}" | base64)
+
+          TOKEN=$(curl -s -X POST \
+            -H "Authorization: Basic $AUTH" \
+            "https://a.blazemeter.com/api/v4/masters/${{ steps.master.outputs.master_id }}/public-token" \
+            | jq -r '.result.token')
+
+          PUBLIC_URL="https://a.blazemeter.com/app/?public-token=$TOKEN#/accounts/${{ inputs.account_id }}/workspaces/${{ inputs.workspace_id }}/projects/${{ inputs.project_id }}/masters/${{ steps.master.outputs.master_id }}/summary"
+
+          echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
+
+      # -------------------------
+      # GitHub Summary
       # -------------------------
       - name: Publish Test Summary
         if: always()
         run: |
-          if [ -n "${{ steps.bzm-action.outputs.testId }}" ]; then
-            BASE_URL="https://a.blazemeter.com/app/#/workspaces/${{ steps.bzm-action.outputs.workspaceId }}/projects/${{ steps.bzm-action.outputs.projectId }}/tests/${{ steps.bzm-action.outputs.testId }}"
-            TEST_LINK="[${BZM_TEST_NAME}]($BASE_URL)"
-            REPORT_LINK="[View Report]($BASE_URL/reports)"
-          else
-            TEST_LINK="$BZM_TEST_NAME"
-            REPORT_LINK="Not Available"
-          fi
+          REPORT_LINK="[View Public Report](${{ steps.public.outputs.public_url }})"
 
           echo "## 📊 BlazeMeter Performance Results" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | ${{ steps.bzm-action.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ steps.bzm.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Project** | $BZM_PROJECT_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| **Workspace** | $BZM_WORKSPACE_NAME |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Test Name** | $TEST_LINK |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test Name** | $BZM_TEST_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Taurus Config** | \`${{ inputs.taurus_config }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **BlazeMeter Report** | $REPORT_LINK |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Public Report URL** | $REPORT_LINK |" >> $GITHUB_STEP_SUMMARY
       # -------------------------
       # Upload Taurus Artifacts
       # -------------------------
