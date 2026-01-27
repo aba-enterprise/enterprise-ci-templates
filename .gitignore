@@ -1,0 +1,230 @@
+# ==============================================
+# DevOps Configuration Repository .gitignore
+# ==============================================
+
+# Security & Secrets
+# ------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+secrets.yaml
+secrets.yml
+.secrets/
+.env
+.env.*
+!.env.example
+*.secret
+*secret*
+*password*
+*credentials*
+
+# CI/CD & Build Artifacts
+# -----------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+terraform.tfvars.json
+.terraform.lock.hcl
+*.plan
+*.tfplan
+
+# Docker & Container Images
+# -------------------------
+Dockerfile.tmp
+docker-compose.override.yml
+.dockerignore.tmp
+
+# Kubernetes & Helm
+# -----------------
+*.orig
+*.rej
+.helmignore.tmp
+charts/*/charts/
+charts/*/requirements.lock
+
+# Azure DevOps & GitHub
+# ---------------------
+.vscode/settings.json
+.vscode/launch.json
+.azure/
+
+# AWS
+# ---
+.aws/
+
+# Google Cloud
+# ------------
+.gcloud/
+*.json
+!*template*.json
+!*example*.json
+
+# Logs & Temporary Files
+# ----------------------
+*.log
+*.cache
+.cache/
+logs/
+[Ll]ogs/
+tmp/
+temp/
+
+# OS Generated Files
+# ------------------
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDE & Editor Files
+# ------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.metadata
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# Node.js (for any JS-based tooling)
+# -----------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# Python (for any Python-based tooling)
+# --------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST.in
+
+# Package Managers
+# ----------------
+vendor/
+Packages/
+Package.pins
+Package.resolved
+
+# Backup Files
+# ------------
+*.backup
+*.old
+*.bak
+#*#
+
+# Custom Tool Outputs
+# -------------------
+output/
+generated/
+*.generated.*
+
+# .NET Build Outputs
+# ------------------
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+build/
+dist/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+artifacts/
+
+# Visual Studio
+# -------------
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# NuGet Packages
+# --------------
+*.nupkg
+*.snupkg
+nuget.exe
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+# .NET DLLs (keep .nuspec files for package definitions)
+# -------------------------------------------------------
+*.dll
+*.dll.config
+
+# Test Coverage Reports
+# ---------------------
+coverage/
+TestResults/
+**/coverage.cobertura.xml
+**/coverage.opencover.xml
+**/coverage.json
+**/coverage.info
+*.trx
+*.coverage
+coveragereport/
+.coverage

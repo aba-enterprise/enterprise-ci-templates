@@ -1,0 +1,44 @@
+#!/bin/sh
+# Pre-push hook for DevOps reusable workflows repository
+# Performs additional validation before pushing to remote
+
+echo "🚀 Running pre-push validation..."
+
+# Get the range of commits being pushed
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        # Check if any workflow files are being pushed
+        CHANGED_WORKFLOWS=$(git diff --name-only "$remote_sha".."$local_sha" | grep -E "\.github/workflows/.*\.(yml|yaml)$" || true)
+        
+        if [ -n "$CHANGED_WORKFLOWS" ]; then
+            echo "📋 Detected workflow changes:"
+            echo "$CHANGED_WORKFLOWS"
+            
+            # Validate workflow file naming convention
+            echo "🏷️  Checking workflow naming conventions..."
+            for workflow in $CHANGED_WORKFLOWS; do
+                filename=$(basename "$workflow")
+                # Check if filename follows kebab-case convention
+                if ! echo "$filename" | grep -qE "^[a-z0-9]+(-[a-z0-9]+)*\.(yml|yaml)$"; then
+                    echo "❌ Workflow file '$filename' doesn't follow naming convention"
+                    echo "   Use kebab-case: build-and-deploy.yml, security-scan.yaml, etc."
+                    exit 1
+                fi
+            done
+            
+            # Check for workflow version tags or proper documentation
+            echo "📚 Validating workflow documentation..."
+            for workflow in $CHANGED_WORKFLOWS; do
+                if ! grep -q "description:" "$workflow" && ! grep -q "# Description:" "$workflow"; then
+                    echo "⚠️  Workflow '$workflow' is missing description"
+                    echo "   Consider adding a description for better maintainability"
+                fi
+            done
+            
+            echo "✅ Workflow validation completed"
+        fi
+    fi
+done
+
+echo "🎉 Pre-push checks passed! Pushing changes..."
+exit 0

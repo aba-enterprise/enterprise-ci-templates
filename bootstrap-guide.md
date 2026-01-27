@@ -1,59 +1,103 @@
-#!/bin/bash
-# bootstrap.sh - Application Repository DevOps Bootstrap
-# Purpose: Validate repository environment and fetch DevOps standards
-# Usage: Copy this file to your application root and run: ./bootstrap.sh
+# DevOps Bootstrap Guide
 
-DEVOPS_REPO="https://clicktime.symantec.com/15xrrBMmXPqvbTZYgcGXv?h=irOoJkshGhNL-cq7qfwS-m3_bmVaGxgzHDSYZN7i62I=&u=https://github.com/CRBG-PhoenixPOC/central-devops-config.git%22
+## Quick Start
 
-echo "🚀 Setting up DevOps organizational standards..."
+**One command to set up DevOps standards in your project:**
 
-# ✅ Repository validation (git directory check)
-if [ ! -d ".git" ]; then
-    echo "❌ Not in a git repository. Please run from your project root."
-    exit 1
-fi
+```bash
+./bootstrap.sh
+```
 
-# ✅ DevOps repository sparse checkout (fetch only required files)
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR"
-git init --quiet
-git remote add origin "$DEVOPS_REPO"
-git config core.sparseCheckout true
- # Specify the files/folders you want to fetch below (edit as needed)
-echo "bootstrap-githooks-setup.sh" >> .git/info/sparse-checkout
-echo "localscans/sonar-analysis-generic.sh" >> .git/info/sparse-checkout
-echo "localscans/codeql.sh" >> .git/info/sparse-checkout
-echo ".github/workflows/ci-dev-template.yml" >> .git/info/sparse-checkout
-echo ".github/workflows/cd-uat-prod-template.yml" >> .git/info/sparse-checkout
-echo ".github/CODEOWNERS" >> .git/info/sparse-checkout
-echo ".github/pull_request_template.md" >> .git/info/sparse-checkout
-echo "manifest/ecs-manifest.yml" >> .git/info/sparse-checkout
-echo ".githooks/commit-msg" >> .git/info/sparse-checkout
-echo ".githooks/pre-commit" >> .git/info/sparse-checkout
-echo ".githooks/pre-push" >> .git/info/sparse-checkout
-echo ".gitignore" >> .git/info/sparse-checkout
+## What It Does
 
-git pull --depth 1 origin main --quiet 2>/dev/null
-cd - > /dev/null
+Automatically installs organizational DevOps standards:
+- ✅ **Git Hooks** - Code quality validation, Jira commit format
+- ✅ **CI/CD Workflows** - GitHub Actions templates for CI and CD
+- ✅ **PR Templates** - Standardized pull request format
+- ✅ **CODEOWNERS** - Code ownership and review assignments
+- ✅ **Scan Scripts** - SonarQube local analysis tools
+- ✅ **ECS Manifests** - ECS deployment templates
 
-# Call the installation script from the central repository
-if [ -f "$TEMP_DIR/bootstrap-githooks-setup.sh" ]; then
-    bash "$TEMP_DIR/bootstrap-githooks-setup.sh" "$TEMP_DIR"
-    INSTALL_SUCCESS=$?
-else
-    echo "❌ bootstrap-githooks-setup.sh not found in central repository"
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
+## Usage
 
-# Cleanup
-rm -rf "$TEMP_DIR"
+### 1. Get Bootstrap
+```bash
+git clone --depth 1 --no-checkout https://clicktime.symantec.com/15xX7FFXi5zgBt5HxzYYS?h=5Jda9MPUT50irx5weVmm8qLu9e0XJsMEnoRX4fs6D1A=&u=https://github.com/CRBG-PhoenixPOC/central-devops-config.git temp_bootstrap && cd temp_bootstrap && git checkout HEAD -- bootstrap.sh && cp bootstrap.sh ../bootstrap.sh && cd .. && rm -rf temp_bootstrap
+```
 
-if [ $INSTALL_SUCCESS -eq 0 ]; then
-    echo ""
-    echo "✅ DevOps bootstrap completed successfully!"
-else
-    echo ""
-    echo "❌ DevOps installation encountered errors."
-    exit 1
-fi
+### 2. Run Setup
+```bash
+./bootstrap.sh
+```
+
+### 3. Commit Changes
+```bash
+git commit -m "feat: add DevOps standards"
+```
+
+## What Gets Installed
+
+| Component | Files | Purpose |
+|-----------|-------|---------|
+| **Git Hooks** | `pre-commit`, `commit-msg`, `pre-push` | Code validation, Jira format |
+| **CI Workflows** | `ci-dev-template.yml` | Continuous Integration pipeline |
+| **CD Workflows** | `cd-uat-prod-template.yml` | Deployment to UAT/Production |
+| **PR Template** | `pull_request_template.md` | Standardized pull requests |
+| **CODEOWNERS** | `CODEOWNERS` | Code ownership rules |
+| **Scans** | `sonar-analysis-generic.sh` | Code quality analysis |
+| **ECS Manifests** | `ecs-manifest.yml` | ECS deployment |
+
+## Verification
+
+```bash
+# Check hooks are configured
+git config --get core.hooksPath
+
+# Test commit validation  
+git commit -m "feat: PROJ-123 test message"
+
+# Run code scan
+./localscans/sonarscan.sh
+
+# Check installed components
+ls -la .githooks/          # Git hooks
+ls -la .github/workflows/  # CI/CD workflows  
+ls -la .github/            # PR template & CODEOWNERS
+ls -la localscans/         # Scan scripts
+ls -la manifest/           # ECS manifests
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "Not in git repository" | Run from project root: `cd your-project && ./bootstrap.sh` |
+| "Failed to access DevOps repo" | Check network: `ping github.com` |
+| Hooks not working | Verify config: `git config --get core.hooksPath` |
+| Files not staged | Manual stage: `git add .githooks/ .github/ localscans/ manifest/` |
+
+## Smart Updates
+
+**First Run:** Installs all DevOps components
+```bash
+✅ Installed: 3 hooks, 3 workflows & templates, 1 scan scripts, 1 manifests
+```
+
+**Subsequent Runs:** Smart behavior per component type
+- **Git Hooks** 🔄 Always update (policies may change)
+- **Workflows** ℹ️ Skip if customized (respects team changes)
+- **PR Template** ℹ️ Skip if exists (preserves customizations)  
+- **CODEOWNERS** ℹ️ Skip if exists (preserves team ownership rules)
+- **Manifests** ℹ️ Skip if exists (preserves project-specific configs)
+
+**Get latest standards:** Re-run `./bootstrap.sh` anytime - safe and idempotent!
+
+## Complete DevOps Toolchain
+
+After installation, your project has:
+- 🔒 **Code Quality Gates** via git hooks
+- 🚀 **CI/CD Pipelines** for automated testing and deployment
+- 📋 **Standardized PRs** with consistent templates
+- � **Code Ownership** with CODEOWNERS file
+- ☸️ **ECS Deployment** with manifest templates
+- 🔍 **Code Scanning** with SonarQube integration
