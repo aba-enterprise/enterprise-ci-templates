@@ -11,43 +11,37 @@ on:
         type: string
         required: false
         default: "SCRUM|PROJ|scrum|proj"
-      language:
-        type: string
-        required: true
       projectPath:
-        type: string
-        required: false
-      buildCommand:
         type: string
         required: false
       run-codeql-gate-check:
         type: string
-        required: true
-        default: "no"
+        required: false
+        default: "yes"
       run-veracode-gate-check:
         type: string
-        required: true
+        required: false
         default: "yes"
       projectKey:
         type: string
-        required: true
+        required: false
       organizationKey:
         type: string
-        required: true
+        required: false
       projectSlnPath:
         type: string
-        required: true
+        required: false
       testProjectPath:
+        type: string
+        required: false
+      run-sonarqube-gate-check:
+        type: string
+        required: false
+        default: "yes"
+      app-language:
         type: string
         required: true
       language-version:
-        type: string
-        required: true
-      run-sonarqube-gate-check:
-        type: string
-        required: true
-        default: "no"
-      app-language:
         type: string
         required: true
       project-path:
@@ -55,150 +49,176 @@ on:
         required: true
       dockerfile-path:
         type: string
+        required: false
+      docker-tech-image-tag:
+        description: "Docker image tag"
         required: true
+        type: string
       environment:
         type: string
         required: true
-      run-prisma-gate-check:
+      run-image-scan-gate-check:
         type: string
-        required: true
-        default: "no"
+        required: false
+        default: "yes"
+      severity-threshold:
+        description: "Fail scan if vulnerabilities at or above this severity (CRITICAL, HIGH, MEDIUM, LOW)"
+        type: string
+        required: false
+        default: "CRITICAL"
+      PRISMA_CONSOLE_URL:
+        description: "Prisma Cloud console URL"
+        type: string
+        required: false
+        default: "https://clicktime.symantec.com/15xrw1Z3z1XX1QPUEAfgY?h=12Tq0s6buWPTtjpcBVCxg9f_g0wR_ngLU8p1xpFdeYE=&u=https://us-east1.cloud.twistlock.com/us-1-123456789%22
     secrets:
       SONAR_TOKEN:
         required: true
       SONAR_HOST_URL:
-        required: true 
-      BLAZEMETER_API_KEY:
         required: true
-      BLAZEMETER_API_SECRET:
+      ORG_PHOENIX_APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for cross-repo access"
+      PRISMA_ACCESS_KEY:
         required: true
+        description: "Prisma Cloud access key"
+      PRISMA_SECRET_KEY:
+        required: true
+        description: "Prisma Cloud secret key"
+
+permissions:
+  security-events: write
+  actions: read
+  contents: read
+  packages: write
+  id-token: write
+  checks: write
+  pull-requests: write
 
 jobs:
-  # # # ------------------------
-  # # # Repository Contribution Compliance Gate
-  # # # ------------------------
-  # Repository-Contribution-Compliance:
-  #   name: Repository Compliance Gate
-  #   uses: aba-enterprise/enterprise-ci-templates/.github/workflows/repository-contribution-compliance-template.yml@main
+  # # ------------------------
+  # # Repository Contribution Compliance Gate
+  # # ------------------------
+  Repository-Contribution-Compliance:
+    name: Repository Compliance Gate
+    uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/repository-compliance-template.yml@main
+    with:
+      base_branch: ${{ inputs.base-branch }}
+      jira_prefix: ${{ inputs.jira-prefix }}
+
+  # # ------------------------
+  # # GHAS Scan (CodeQL Security & Quality)
+  # # ------------------------
+  # GHAS-Scan:
+  #   name: GHAS Security & Quality Scan
+  #   needs: [Repository-Contribution-Compliance]
+  #   uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/codeql-template.yml@main
   #   with:
-  #     base_branch: ${{ inputs.base-branch }}
-  #     jira_prefix: ${{ inputs.jira-prefix }}
-  
-  # # # # # ------------------------
-  # # # # # Code Scan (Codeql)
-  # # # # # ------------------------
-  Codeql-scan:
-    name: CodeQL Scan & Quality Gate
-    # needs: Repository-Contribution-Compliance
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/codeql-template.yml@main
-    with:
-      language: ${{ inputs.app-language }}
-      projectPath: ${{ inputs.projectPath }}
-      buildCommand: ${{ inputs.buildCommand }}
-      run-codeql-gate-check: ${{ inputs.run-codeql-gate-check }}
-    secrets: inherit
-  
-  # # # # # ------------------------
-  # # # # # Veracode
-  # # # # # ------------------------
-  Veracode-scan:
-    name: Veracode SAST & Quality Gate
-    # needs: Repository-Contribution-Compliance
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/veracode-baseline-scan-template.yml@main
-    with:
-      run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
-    secrets: inherit
+  #     app-language: ${{ inputs.app-language }}
+  #     projectPath: ${{ inputs.projectPath }}
+  #     language-version: ${{ inputs.language-version }}
+  #     run-codeql-gate-check: ${{ inputs.run-codeql-gate-check }}
+  #   secrets: inherit
 
-  # # # # # ------------------------
-  # # # # # Sonarqube scan
-  # # # # # ------------------------
-  Sonarqube-scan:
-    name: Sonar Code Coverage & Quality Gate
-    # needs:  Repository-Contribution-Compliance
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/sonarqube-template-m.yml@main
-    with:
-      projectKey: ${{ inputs.projectKey }}
-      organizationKey: ${{ inputs.organizationKey }}
-      projectSlnPath: ${{ inputs.projectSlnPath }}
-      testProjectPath: ${{ inputs.testProjectPath }}
-      language: ${{ inputs.language }}
-      language-version: ${{ inputs.language-version }}
-      run-sonarqube-gate-check: ${{ inputs.run-sonarqube-gate-check }}
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#   # # # # ------------------------
+#   # # # # Veracode
+#   # # # # ------------------------
+#   Veracode-scan:
+#     name: Veracode SAST & Quality Gate
+#     needs: Repository-Contribution-Compliance
+#     uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/veracode-baseline-scan-template.yml@main
+#     with:
+#       run-veracode-gate-check: ${{ inputs.run-veracode-gate-check }}
+#     secrets: inherit
+
+#   # # # # ------------------------
+#   # # # # Sonarqube scan
+#   # # # # ------------------------
+#   Sonarqube-scan:
+#     name: Sonar Code Coverage & Quality Gate
+#     needs:  Repository-Contribution-Compliance
+#     uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/sonarqube-scan-template.yml@main
+#     with:
+#       projectKey: ${{ inputs.projectKey }}
+#       organizationKey: ${{ inputs.organizationKey }}
+#       projectSlnPath: ${{ inputs.projectSlnPath }}
+#       testProjectPath: ${{ inputs.testProjectPath }}
+#       language: ${{ inputs.language }}
+#       language-version: ${{ inputs.language-version }}
+#       run-sonarqube-gate-check: ${{ inputs.run-sonarqube-gate-check }}
+#     secrets:
+#       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   # # # ------------------------
-  # # # CI Stage (Build Image and Push to ECR)
+  # # # Unit Testing
   # # # ------------------------
-  ci:
-    name: Build & Push Image to ECR
-    needs: [Sonarqube-scan, Veracode-scan, Codeql-scan]
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/docker-build-push.yml@main
+  # Unit-Tests:
+  #   name: Unit Testing
+  #   needs: [Repository-Contribution-Compliance]
+  #   uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/unit-testing-template.yml@main
+  #   with:
+  #     app-language: ${{ inputs.app-language }}
+  #     language-version: ${{ inputs.language-version }}
+  #     testProjectPath: ${{ inputs.testProjectPath }}
+  #     coverage-threshold: 0
+  #   secrets: inherit
+
+  # # ------------------------
+  # # Build Application and Docker Image
+  # # ------------------------
+  Build-Application-and-Docker-Image:
+    name: Build Application and Docker Image
+    needs: [Repository-Contribution-Compliance]
+    uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/docker-build-template.yml@main
     with:
       app-language: ${{ inputs.app-language }}
       project-path: ${{ inputs.project-path }}
-      dockerfile-path: ${{ inputs.dockerfile-path }}
+      docker-tech-image-tag: ${{ inputs.docker-tech-image-tag }}
       language-version: ${{ inputs.language-version }}
       environment: ${{ inputs.environment }}
     secrets: inherit
 
-  # # # # ------------------------
-  # # # # Prisma-Image-scan
-  # # # # ------------------------
-  Prisma-Image-scan:
-    name: Prisma Image Scan & Quality Gate
-    needs: ci
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/prisma-scan-template.yml@main
-    with:
-      run-prisma-gate-check: ${{ inputs.run-prisma-gate-check }}
-    secrets: inherit
+  # # # ------------------------
+  # # # Image scan and Push to ECR
+  # # # ------------------------
+  # Docker-Image-Scan:
+  #   name: Image scan and Push to ECR
+  #   needs: [Build-Application-and-Docker-Image]
+  #   uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/docker-image-scan-template.yml@main
+  #   with:
+  #     ecr-registry: ${{ needs.Build-Application-and-Docker-Image.outputs.ECR_REGISTRY }}
+  #     ecr-repository: ${{ needs.Build-Application-and-Docker-Image.outputs.ECR_REPOSITORY }}
+  #     image-tag: ${{ needs.Build-Application-and-Docker-Image.outputs.IMAGE_TAG }}
+  #     environment: ${{ inputs.environment }}
+  #     severity-threshold: ${{ inputs.severity-threshold }}
+  #     run-image-scan-gate-check: ${{ inputs.run-image-scan-gate-check }}
+  #     PRISMA_CONSOLE_URL: ${{ inputs.PRISMA_CONSOLE_URL }}
+  #   secrets: inherit
 
   # ------------------------
   # Deploy to Dev (auto) ECS Task + Service
   # ------------------------
   ecs-deploy-dev:
-    # needs: [ci]
-    needs: [ci, Prisma-Image-scan]
+    needs: [Build-Application-and-Docker-Image]
     name: Deploy to Dev
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ecs-deployment-templatemanifest.yml@Feature-Mp
+    uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/ecs-deployment-template-d.yml@main
     with:
       environment: ${{ inputs.environment }}
       app-language: ${{ inputs.app-language }}
-      image-tag: ${{ needs.ci.outputs.IMAGE_TAG }}
+      image-tag: ${{ needs.Build-Application-and-Docker-Image.outputs.IMAGE_TAG }}
     secrets: inherit
 
-  #------------------------------------
-  # Blazemeter performance Testing 
-  #----------------------------------------
-  Taurus-Performance-Test:
-    needs: Switch-Traffic
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/blazemeter-performance.yml@Feature-Mp
-    with:
-      taurus_config: performance.yaml
-      language: dotnet
-      environment: dev
-      project_name: Sample-dotnet-app
-      project_id: 2583642
-      workspace_id: 2258895
-      account_id: 2180431
-      workspace_name: Dev-Performance
-      test_name: "${{ github.repository }}-dev-${{ github.run_number }}"
-    secrets: 
-      BLAZEMETER_API_KEY: ${{ secrets.BLAZEMETER_API_KEY }}
-      BLAZEMETER_API_SECRET: ${{ secrets.BLAZEMETER_API_SECRET }}
-
-
-  Switch-Traffic:
-    needs: ecs-deploy-dev
-    name: Switch Traffic to Live
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/manual-promotion.yml@main
-    with:
-      environment: ${{ inputs.environment }}
-      temp-listener-arn: ${{ needs.ecs-deploy-dev.outputs.TEMP_LISTENER_ARN }}
-      idle-tg: ${{ needs.ecs-deploy-dev.outputs.IDLE_TG }}
-      idle-service: ${{ needs.ecs-deploy-dev.outputs.IDLE_SERVICE }}
-      is-first-deploy: ${{ fromJSON(needs.ecs-deploy-dev.outputs.IS_FIRST_DEPLOY) }}
-      live-service: ${{ needs.ecs-deploy-dev.outputs.LIVE_SERVICE}}
-      main-alb-listener-arn: ${{ needs.ecs-deploy-dev.outputs.MAIN_ALB_LISTENER_ARN }}
-    secrets: inherit
+#   Switch-Traffic:
+#     needs: ecs-deploy-dev
+#     name: Switch Traffic to Live
+#     uses: CRBG-PhoenixPOC/central-devops-config/.github/workflows/manual-promotion-template.yml@main
+#     with:
+#       environment: ${{ inputs.environment }}
+#       temp-listener-arn: ${{ needs.ecs-deploy-dev.outputs.TEMP_LISTENER_ARN }}
+#       idle-tg: ${{ needs.ecs-deploy-dev.outputs.IDLE_TG }}
+#       idle-service: ${{ needs.ecs-deploy-dev.outputs.IDLE_SERVICE }}
+#       is-first-deploy: ${{ fromJSON(needs.ecs-deploy-dev.outputs.IS_FIRST_DEPLOY) }}
+#       live-service: ${{ needs.ecs-deploy-dev.outputs.LIVE_SERVICE}}
+#       main-alb-listener-arn: ${{ needs.ecs-deploy-dev.outputs.MAIN_ALB_LISTENER_ARN }}
+#     secrets: inherit

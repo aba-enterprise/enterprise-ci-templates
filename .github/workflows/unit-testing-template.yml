@@ -1,0 +1,370 @@
+# ============================================
+# Multi-Platform Unit Testing Template
+# ============================================
+# Supports:
+# 1. .NET 6.0 and 8.0 with xUnit, Coverlet
+# 2. Java 17 and 21 with Maven, JUnit 5, JaCoCo
+# ============================================
+
+name: Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      app-language:
+        description: "Programming language (dotnet, java)"
+        required: true
+        type: string
+      language-version:
+        description: "Language version (6.0.x, 8.0.x for .NET; 17, 21 for Java)"
+        required: true
+        type: string
+      testProjectPath:
+        description: "Project path for testing"
+        required: false
+        type: string
+      coverage-threshold:
+        description: "Code coverage threshold (0-100)"
+        required: false
+        type: number
+        default: 0
+    secrets:
+      ORG_PHOENIX_APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for cross-repo access"
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+# env:
+#   BUILD_CONFIGURATION: Release
+
+jobs:
+  # ============================================
+  # Unit Tests & Coverage Gate
+  # ============================================
+  unit-tests-and-coverage-gate:
+    name: Unit Tests & Coverage Gate
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_CONFIGURATION: Release
+    
+    steps:
+
+    # Generate GitHub App token (if App_ID and PRIVATE_KEY are provided)
+    - name: Generate GitHub App Token
+      id: generate-token
+      if: ${{ inputs.app-language == 'java' }}
+      continue-on-error: true
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ vars.ORG_APP_ID }}
+        private-key: ${{ secrets.ORG_PHOENIX_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
+    # Checkout code
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      # with:
+      #   fetch-depth: 0
+    
+    # ============================================
+    # .NET Setup and Testing
+    # ============================================
+    
+    # Setup .NET
+    - name: Setup .NET ${{ inputs.language-version }}
+      if: inputs.app-language == 'dotnet' || inputs.app-language == 'csharp'
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.language-version }}
+    
+    # Cache NuGet packages
+    - name: Cache NuGet packages
+      if: inputs.app-language == 'dotnet' || inputs.app-language == 'csharp'
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+    
+    # Run .NET unit tests
+    - name: Run .NET unit tests with coverage
+      if: inputs.app-language == 'dotnet' || inputs.app-language == 'csharp'
+      run: |
+        dotnet test ${{ inputs.testProjectPath }} \
+          --configuration ${{ env.BUILD_CONFIGURATION }} \
+          --collect:"XPlat Code Coverage" \
+          --logger "trx;LogFileName=test-results.trx" \
+          --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover,cobertura
+    
+    # Generate .NET coverage report
+    - name: Generate .NET coverage report
+      if: (success() || failure()) && (inputs.app-language == 'dotnet' || inputs.app-language == 'csharp')
+      run: |
+        dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.2.0 || true
+        reportgenerator \
+          -reports:"./TestResults/**/coverage.cobertura.xml" \
+          -targetdir:"./CoverageReport" \
+          -reporttypes:"Html;MarkdownSummaryGithub;Cobertura" \
+          -verbosity:"Info"
+      continue-on-error: false
+    
+    # Add .NET coverage to summary
+    - name: Add .NET coverage to PR summary
+      if: always() && (inputs.app-language == 'dotnet' || inputs.app-language == 'csharp')
+      run: |
+        echo "## Unit Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Find the Cobertura coverage file
+        COVERAGE_FILE=$(find ./TestResults -name "coverage.cobertura.xml" -type f | head -n 1)
+        
+        if [ -n "$COVERAGE_FILE" ] && [ -f "$COVERAGE_FILE" ]; then
+          echo "📊 Parsing coverage from: $COVERAGE_FILE"
+          
+          # Extract overall coverage metrics using xmllint or grep
+          LINE_RATE=$(grep -oP 'line-rate="\K[0-9.]+' "$COVERAGE_FILE" | head -n 1)
+          BRANCH_RATE=$(grep -oP 'branch-rate="\K[0-9.]+' "$COVERAGE_FILE" | head -n 1)
+          
+          # Convert to percentage
+          LINE_PCT=$(echo "$LINE_RATE * 100" | bc -l | xargs printf "%.2f")
+          BRANCH_PCT=$(echo "$BRANCH_RATE * 100" | bc -l | xargs printf "%.2f")
+          
+          # Get lines covered/valid counts
+          LINES_COVERED=$(grep -oP 'lines-covered="\K[0-9]+' "$COVERAGE_FILE" | head -n 1)
+          LINES_VALID=$(grep -oP 'lines-valid="\K[0-9]+' "$COVERAGE_FILE" | head -n 1)
+          BRANCHES_COVERED=$(grep -oP 'branches-covered="\K[0-9]+' "$COVERAGE_FILE" | head -n 1)
+          BRANCHES_VALID=$(grep -oP 'branches-valid="\K[0-9]+' "$COVERAGE_FILE" | head -n 1)
+          
+          echo "| Metric | Covered | Total | Coverage % |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|---------|-------|------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Lines** | **$LINES_COVERED** | **$LINES_VALID** | **${LINE_PCT}%** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branches** | **$BRANCHES_COVERED** | **$BRANCHES_VALID** | **${BRANCH_PCT}%** |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add threshold check
+          THRESHOLD=${{ inputs.coverage-threshold }}
+          if (( $(echo "$LINE_PCT >= $THRESHOLD" | bc -l) )); then
+            echo "✅ **Coverage Status:** PASSED (${LINE_PCT}% ≥ ${THRESHOLD}% threshold)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Coverage Status:** BELOW THRESHOLD (${LINE_PCT}% < ${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
+          fi
+        elif [ -f ./CoverageReport/SummaryGithub.md ]; then
+          # Fallback: if XML parsing fails, show ReportGenerator summary
+          cat ./CoverageReport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ No coverage data found" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Full coverage report available in artifacts" >> $GITHUB_STEP_SUMMARY
+    
+    # Upload .NET test results
+    - name: Upload .NET test results
+      if: (success() || failure()) && (inputs.app-language == 'dotnet' || inputs.app-language == 'csharp')
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-dotnet
+        path: ./TestResults/*.trx
+        retention-days: 30
+    
+    # Upload .NET coverage report
+    - name: Upload .NET coverage report
+      if: (success() || failure()) && (inputs.app-language == 'dotnet' || inputs.app-language == 'csharp')
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-dotnet
+        path: ./CoverageReport
+        retention-days: 30
+    
+    # ============================================
+    # Java Setup and Testing
+    # ============================================
+    
+    # Setup Java with centralized Maven settings
+    - name: Setup Java
+      if: ${{ inputs.app-language == 'java' }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.language-version || '17' }}
+        cache: 'maven'
+  
+    # Checkout centralized DevOps config for Maven settings
+    - name: Checkout central DevOps config
+      if: ${{ inputs.app-language == 'java' }}
+      uses: actions/checkout@v4
+      with:
+        repository: CRBG-PhoenixPOC/central-devops-config
+        ref: feature-acm
+        path: .devops-config
+        token: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+    
+    # Setup Maven settings from central repo
+    - name: Configure Maven settings
+      if: ${{ inputs.app-language == 'java' }}
+      run: |
+          mkdir -p ~/.m2
+          if [ -f .devops-config/maven/settings.xml ]; then
+            cp .devops-config/maven/settings.xml ~/.m2/settings.xml
+            echo "✅ Maven settings configured"
+          else
+            echo "❌ Error: settings.xml not found"
+            exit 1
+          fi   
+    
+    # Resolve Maven dependencies explicitly (before autobuild)
+    - name: Resolve Maven dependencies
+      if: ${{ inputs.app-language == 'java' }}
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          APP_TOKEN_EXISTS: ${{ steps.generate-token.outputs.token != '' && 'true' || 'false' }}
+      run: |
+          echo "Resolving Maven dependencies with GitHub authentication..."
+          echo "GITHUB_ACTOR: $GITHUB_ACTOR"
+          mvn dependency:resolve -B -q ${{ inputs.projectPath && format('-f {0}', inputs.projectPath) || '' }}
+    
+    # Cache Maven packages
+    - name: Cache Maven dependencies
+      if: ${{ inputs.app-language == 'java' }}
+      uses: actions/cache@v4
+      with:
+          path: |
+            ~/.m2/repository
+            target
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+    
+    # Run Java unit tests with coverage
+    - name: Run Java unit tests with coverage
+      if: ${{ inputs.app-language == 'java' }}
+      env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+      run: |
+        echo "Running Maven tests in $(pwd)..."
+        mvn test -B
+    
+    # Generate JaCoCo coverage report
+    - name: Generate JaCoCo coverage report
+      if: ${{ inputs.app-language == 'java' }}
+      run: mvn jacoco:report
+    
+    # Add Java coverage to summary
+    - name: Add Java coverage to summary
+      if: ${{ inputs.app-language == 'java' }}
+      run: |
+        echo "Generating Java coverage summary..."
+        pwd
+        echo "Checking for coverage files..."
+        
+        if [ -f target/site/jacoco/index.html ]; then
+          echo "✅ Found index.html"
+        else
+          echo "❌ index.html not found"
+        fi
+        
+        if [ -f target/site/jacoco/jacoco.csv ]; then
+          echo "✅ Found jacoco.csv"
+          echo "CSV content preview:"
+          head -n 5 target/site/jacoco/jacoco.csv
+          echo ""
+          echo "Looking for Total row..."
+          grep -i total target/site/jacoco/jacoco.csv || echo "No Total row found"
+        else
+          echo "❌ jacoco.csv not found"
+        fi
+        
+        echo "## Unit Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Try to parse CSV file first (most reliable method)
+        if [ -f target/site/jacoco/jacoco.csv ]; then
+          echo "Parsing jacoco.csv for coverage data..."
+          echo "| Element | Missed | Covered | Total | Coverage % |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|---------|-------|------------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Sum all rows to calculate totals (no "Total" row exists in JaCoCo CSV)
+          awk -F',' '
+          BEGIN {
+            instruction_missed=0; instruction_covered=0;
+            branch_missed=0; branch_covered=0;
+            line_missed=0; line_covered=0;
+            complexity_missed=0; complexity_covered=0;
+            method_missed=0; method_covered=0;
+            class_missed=0; class_covered=0;
+          }
+          NR>1 {
+            # Sum all the metrics from each row
+            instruction_missed+=$4; instruction_covered+=$5;
+            branch_missed+=$6; branch_covered+=$7;
+            line_missed+=$8; line_covered+=$9;
+            complexity_missed+=$10; complexity_covered+=$11;
+            method_missed+=$12; method_covered+=$13;
+            class_missed+=$14; class_covered+=$15;
+          }
+          END {
+            instruction_total=instruction_missed+instruction_covered;
+            branch_total=branch_missed+branch_covered;
+            line_total=line_missed+line_covered;
+            complexity_total=complexity_missed+complexity_covered;
+            method_total=method_missed+method_covered;
+            class_total=class_missed+class_covered;
+            
+            instruction_pct=(instruction_total>0)?(instruction_covered/instruction_total*100):0;
+            branch_pct=(branch_total>0)?(branch_covered/branch_total*100):0;
+            line_pct=(line_total>0)?(line_covered/line_total*100):0;
+            complexity_pct=(complexity_total>0)?(complexity_covered/complexity_total*100):0;
+            method_pct=(method_total>0)?(method_covered/method_total*100):0;
+            class_pct=(class_total>0)?(class_covered/class_total*100):0;
+            
+            printf "| **Instructions** | **%d** | **%d** | **%d** | **%.2f%%** |\n", instruction_missed, instruction_covered, instruction_total, instruction_pct;
+            printf "| **Branches** | **%d** | **%d** | **%d** | **%.2f%%** |\n", branch_missed, branch_covered, branch_total, branch_pct;
+            printf "| **Lines** | **%d** | **%d** | **%d** | **%.2f%%** |\n", line_missed, line_covered, line_total, line_pct;
+            printf "| **Complexity** | **%d** | **%d** | **%d** | **%.2f%%** |\n", complexity_missed, complexity_covered, complexity_total, complexity_pct;
+            printf "| **Methods** | **%d** | **%d** | **%d** | **%.2f%%** |\n", method_missed, method_covered, method_total, method_pct;
+            printf "| **Classes** | **%d** | **%d** | **%d** | **%.2f%%** |\n", class_missed, class_covered, class_total, class_pct;
+          }' target/site/jacoco/jacoco.csv >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+         
+          echo "✅ Coverage data successfully parsed from jacoco.csv" >> $GITHUB_STEP_SUMMARY
+        elif [ -f target/site/jacoco/index.html ]; then
+          echo "⚠️ CSV file not found, falling back to HTML parsing" >> $GITHUB_STEP_SUMMARY
+          echo "Please ensure JaCoCo plugin is configured to generate CSV reports" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ No coverage files found. Please check JaCoCo configuration." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Full coverage report available in artifacts" >> $GITHUB_STEP_SUMMARY
+    
+    # Upload Java test results
+    - name: Upload Java test results
+      if: ${{ inputs.app-language == 'java' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-surefire-results
+        path: target/surefire-reports/
+        retention-days: 30
+    
+    # Upload Java coverage report
+    - name: Upload Java coverage report
+      if: ${{ inputs.app-language == 'java' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: jacoco-coverage-report
+        path: target/site/jacoco/
+        retention-days: 30

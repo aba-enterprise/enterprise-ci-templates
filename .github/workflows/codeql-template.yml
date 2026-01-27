@@ -1,19 +1,15 @@
-name: CodeQL Security Scan (Reusable)
+name: Security Scan CodeQL 
 
 on:
   workflow_call:
     inputs:
-      language:
+      app-language:
         description: "Programming language to scan (csharp, java, javascript, python, go, cpp, ruby)"
         required: true
         type: string
-        default: "javascript"
+        default: "auto"
       projectPath:
         description: "Project path for build (required for .NET or multi-project builds)"
-        required: false
-        type: string
-      buildCommand:
-        description: "Optional build command, if the language requires a build"
         required: false
         type: string
       run-codeql-gate-check:
@@ -21,90 +17,266 @@ on:
         type: string
         required: false
         default: "yes"
+      language-version:
+        type: string
+        required: false
+        description: "Runtime version (e.g., Java 17, .NET 8)"
+    secrets:
+      ORG_PHOENIX_APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for cross-repo access"
 
 jobs:
-  codeql-scan:
-    name: CodeQL Scan & Quality Gate
+  GHAS-scan:
+    name: GHAS Security & Quality Scan
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
     permissions:
       actions: read
       contents: read
       security-events: write
-
+      packages: write
+    
     steps:
-      # 1️⃣ Checkout code
+      # Generate GitHub App token (if App_ID and PRIVATE_KEY are provided)
+      - name: Generate GitHub App Token
+        id: generate-token
+        if: ${{ inputs.app-language != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.ORG_APP_ID }}
+          private-key: ${{ secrets.ORG_PHOENIX_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      
+      # Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Initialize CodeQL for the specified language
+      # Initialize CodeQL for the specified language
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
-          languages: ${{ inputs.language }}
+          languages: ${{ inputs.app-language == 'dotnet' && 'csharp' || inputs.app-language }}
+          config: |
+            queries:
+              - uses: security-and-quality
+            paths-ignore:
+              - '**/test/**'
+              - '**/tests/**'
+              - '**/Test/**'
+              - '**/Tests/**'
+              - '**/*.test.*'
+              - '**/*.spec.*'
 
-      # 3️⃣ Restore dependencies for .NET only
+      # Setup Java with centralized Maven settings
+      - name: Setup Java
+        if: ${{ inputs.app-language == 'java' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ inputs.language-version || '17' }}
+          cache: 'maven'
+
+      # Checkout centralized DevOps config for Maven settings
+      - name: Checkout central DevOps config
+        if: ${{ inputs.app-language == 'java' }}
+        uses: actions/checkout@v4
+        with:
+          repository: CRBG-PhoenixPOC/central-devops-config
+          ref: main
+          path: .devops-config
+          token: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      # Setup Maven settings from central repo
+      - name: Configure Maven settings
+        if: ${{ inputs.app-language == 'java' }}
+        run: |
+          mkdir -p ~/.m2
+          if [ -f .devops-config/maven/settings.xml ]; then
+            cp .devops-config/maven/settings.xml ~/.m2/settings.xml
+            echo "✅ Maven settings configured"
+          else
+            echo "❌ Error: settings.xml not found"
+            exit 1
+          fi
+
+      # Resolve Maven dependencies explicitly (before autobuild)
+      - name: Resolve Maven dependencies
+        if: ${{ inputs.app-language == 'java' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          APP_TOKEN_EXISTS: ${{ steps.generate-token.outputs.token != '' && 'true' || 'false' }}
+        run: |
+          echo "Resolving Maven dependencies with GitHub authentication..."
+          echo "GITHUB_ACTOR: $GITHUB_ACTOR"
+          mvn dependency:resolve -B -q ${{ inputs.projectPath && format('-f {0}', inputs.projectPath) || '' }}
+
+      # Restore dependencies for .NET only
       - name: Restore .NET dependencies
-        if: ${{ inputs.language == 'csharp' && inputs.projectPath != '' }}
-        run: dotnet restore ${{ inputs.projectPath }}
-
-      # 4️⃣ Build project if build command is provided
-      - name: Build project (if needed)
-        if: ${{ inputs.buildCommand != '' }}
-        run: ${{ inputs.buildCommand }}
-      
-      # ⚠️ Warn if build skipped for build-required language
-      - name: Warn if build skipped for build-required language
-        if: ${{ (inputs.language == 'csharp' || inputs.language == 'java' || inputs.language == 'cpp') && inputs.buildCommand == '' }}
+        if: ${{ inputs.app-language == 'dotnet' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          APP_TOKEN_EXISTS: ${{ steps.generate-token.outputs.token != '' && 'true' || 'false' }}
         run: |
-          echo "::warning::⚠️ No buildCommand provided for ${{ inputs.language }}. CodeQL results may be incomplete."
+          echo "🔍 Verifying environment variables..."
+          echo "GITHUB_ACTOR is set to: $GITHUB_ACTOR"
+          dotnet restore ${{ inputs.projectPath || '.' }} --verbosity quiet
 
-      # 5️⃣ Run CodeQL analysis
+      # Autobuild for compiled languages (if no custom build command)
+      - name: Build Project with CodeQL Autobuild
+        if: ${{ inputs.app-language == 'java' || inputs.app-language == 'dotnet' || inputs.app-language == 'cpp' || inputs.app-language == 'go' }}
+        uses: github/codeql-action/autobuild@v4
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      # Run CodeQL analysis
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
-       # 6️⃣  Upload publish artifacts (only for C#)
-      - name: Upload publish artifacts
-        if: ${{ inputs.language == 'csharp' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: dotnet-publish
-          path: publishoutput/
-      
-      #  CodeQl Gate
+      # CodeQL Quality Gate
       - name: Check CodeQL Alerts
+        continue-on-error: false
         run: |
-          echo "🔎 Checking CodeQL alerts for branch ${GITHUB_REF}..."
-
-          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?ref=${GITHUB_REF}&state=open" \
-            | jq > alerts.json
+          echo "Checking CodeQL alerts for repository ${GITHUB_REPOSITORY}..."
           
+          # Extract branch name from GITHUB_REF (e.g., refs/heads/main -> main)
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "📍 Current branch: $BRANCH_NAME"
+
+          # Fetch all open alerts with pagination support
+          echo "📡 Fetching alerts from GitHub API..."
+          
+          # Initialize empty array
+          echo "[]" > all_alerts.json
+          
+          # Fetch pages until we get all alerts
+          PAGE=1
+          while true; do
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o page.json \
+              -H "Authorization: Bearer ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://clicktime.symantec.com/15xrmMAV4nALBWjd93sPJ?h=1hdFulHuqevFpv8lhfmA6PTUNKeW8dw6NWDNWnNfS3A=&u=https://api.github.com/repos/%24%7BGITHUB_REPOSITORY%7D/code-scanning/alerts?state%3Dopen%26per_page%3D100%26page%3D%24PAGE%22%29
+            
+            if [[ "$HTTP_CODE" != "200" ]]; then
+              echo "❌ API Error: HTTP $HTTP_CODE"
+              cat page.json
+              exit 1
+            fi
+            
+            # Check if page is empty (no more results)
+            PAGE_COUNT=$(jq 'length' page.json)
+            if [[ "$PAGE_COUNT" -eq 0 ]]; then
+              break
+            fi
+            
+            echo "Fetched page $PAGE: $PAGE_COUNT alerts"
+            
+            # Merge with all alerts
+            jq -s '.[0] + .[1]' all_alerts.json page.json > temp.json
+            mv temp.json all_alerts.json
+            
+            # If we got less than 100, this is the last page
+            if [[ "$PAGE_COUNT" -lt 100 ]]; then
+              break
+            fi
+            
+            PAGE=$((PAGE + 1))
+          done
+          
+          # Use merged results
+          mv all_alerts.json alerts.json
+          
+          # Check if we got valid JSON
+          if ! jq empty alerts.json 2>/dev/null; then
+            echo "❌ Error: Invalid API response"
+            cat alerts.json
+            exit 1
+          fi
+          
+          # Show total count
+          TOTAL=$(jq 'length' alerts.json)
+          echo "Total alerts fetched: $TOTAL"
+          
+          # Count alerts by security severity level (only for security rules)
           CRITICAL=$(jq '[.[] | select(.rule.security_severity_level=="critical")] | length' alerts.json)
           HIGH=$(jq '[.[] | select(.rule.security_severity_level=="high")] | length' alerts.json)
           MEDIUM=$(jq '[.[] | select(.rule.security_severity_level=="medium")] | length' alerts.json)
           LOW=$(jq '[.[] | select(.rule.security_severity_level=="low")] | length' alerts.json)
+          
+          # Count alerts by rule severity (for quality rules: error, warning, note)
+          # Only count non-security alerts (where security_severity_level is null or doesn't exist)
+          ERROR=$(jq '[.[] | select(.rule.severity=="error" and (.rule.security_severity_level == null or .rule.security_severity_level == ""))] | length' alerts.json)
+          WARNING=$(jq '[.[] | select(.rule.severity=="warning" and (.rule.security_severity_level == null or .rule.security_severity_level == ""))] | length' alerts.json)
+          NOTE=$(jq '[.[] | select(.rule.severity=="note" and (.rule.security_severity_level == null or .rule.security_severity_level == ""))] | length' alerts.json)
+          
+          # Count uncategorized alerts (no security_severity_level and no rule.severity)
+          UNCATEGORIZED=$(jq '[.[] | select((.rule.security_severity_level == null or .rule.security_severity_level == "") and (.rule.severity == null or .rule.severity == ""))] | length' alerts.json)
+          
+          # Show sample of High severity alerts for debugging
+          if [[ "$HIGH" -gt 0 ]]; then
+            echo ""
+            echo "⚠️  Sample High Severity Alert:"
+            jq -r '[.[] | select(.rule.security_severity_level=="high")] | .[0] | "  - \(.rule.name) (\(.rule.id))"' alerts.json
+            echo ""
+          fi
 
           echo "🔎 CodeQL Findings Summary:"
-          echo "  Critical: $CRITICAL"
-          echo "  High:     $HIGH"
-          echo "  Medium:   $MEDIUM"
-          echo "  Low:      $LOW"
+          echo "  🔒 Security Issues:"
+          echo "    Critical: $CRITICAL"
+          echo "    High:     $HIGH"
+          echo "    Medium:   $MEDIUM"
+          echo "    Low:      $LOW"
+          echo "  📋 Quality Issues:"
+          echo "    Error:    $ERROR"
+          echo "    Warning:  $WARNING"
+          echo "    Note:     $NOTE"
+          if [[ "$UNCATEGORIZED" -gt 0 ]]; then
+            echo "  ❓ Uncategorized: $UNCATEGORIZED"
+          fi
+          echo "  📊 Total:   $TOTAL (Expected: $((CRITICAL + HIGH + MEDIUM + LOW + ERROR + WARNING + NOTE + UNCATEGORIZED)))"
 
           {
-            echo "## 🔎 CodeQL Findings Summary"
-            echo "- Critical: **$CRITICAL**"
-            echo "- High: **$HIGH**"
-            echo "- Medium: $MEDIUM"
-            echo "- Low: $LOW"
+            echo "## CodeQL Findings Summary"
+            echo ""
+            echo "| Category | Severity | Count |"
+            echo "|------|----------|------:|"
+            echo "| Security Issues | Critical | **$CRITICAL** |"
+            echo "| | High | **$HIGH** |"
+            echo "| | Medium | $MEDIUM |"
+            echo "| | Low | $LOW |"
+            SECURITY_TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
+            echo "| | Total | **$SECURITY_TOTAL** |"
+            echo "| Code Quality | Error | $ERROR |"
+            echo "| | Warning | $WARNING |"
+            echo "| | Note | $NOTE |"
+            QUALITY_TOTAL=$((ERROR + WARNING + NOTE))
+            echo "| | Total | **$QUALITY_TOTAL** |"
+            if [[ "$UNCATEGORIZED" -gt 0 ]]; then
+              echo "| Other | Uncategorized | $UNCATEGORIZED |"
+            fi
+            echo "| **Total Alerts** | | **$TOTAL** |"
+            echo ""
           } >> $GITHUB_STEP_SUMMARY
           
-          INPUT_RUN_ALERT_CHECK=${{ inputs.run-codeql-gate-check }}
-            if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]] && { [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; }; then
-                echo "❌ Pipeline failed due to critical/high findings."
-                exit 1
-            elif [[ "$INPUT_RUN_ALERT_CHECK" == "no" ]]; then
-                echo "⚠️ Gate check bypassed as per configuration (run-codeql-gate-check=no)." >> $GITHUB_STEP_SUMMARY
+          INPUT_RUN_ALERT_CHECK="${{ inputs.run-codeql-gate-check }}"
+          if [[ "$INPUT_RUN_ALERT_CHECK" == "yes" ]]; then
+            if [[ "$CRITICAL" -gt 0 ]] || [[ "$HIGH" -gt 0 ]]; then
+              echo "❌ Pipeline failed: $CRITICAL critical and $HIGH high severity security findings detected."
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "❌ **Quality Gate: FAILED** - Critical/High security issues detected." >> $GITHUB_STEP_SUMMARY
+              exit 1
             else
-                echo "✅ No critical/high findings. Continuing pipeline." >> $GITHUB_STEP_SUMMARY
+              echo "✅ No critical/high security findings. Continuing pipeline."
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "✅ **Quality Gate: PASSED** - No critical/high security issues." >> $GITHUB_STEP_SUMMARY
             fi
+          else
+            echo "⚠️ Gate check bypassed as per configuration (run-codeql-gate-check=no)."
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Quality Gate: BYPASSED** - Check disabled in workflow configuration." >> $GITHUB_STEP_SUMMARY
+          fi

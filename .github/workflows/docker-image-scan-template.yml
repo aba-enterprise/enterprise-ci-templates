@@ -1,0 +1,325 @@
+name: Image Scan and Push to ECR
+
+on:
+  workflow_call:
+    inputs:
+      ecr-registry:
+        description: "ECR registry URL"
+        type: string
+        required: true
+      ecr-repository:
+        description: "ECR repository name"
+        type: string
+        required: true
+      image-tag:
+        description: "Docker image tag to scan"
+        type: string
+        required: true
+      image-tag-branch:
+        description: "Docker image branch tag"
+        type: string
+        required: false
+      # aws-region:
+      #   description: "AWS region for ECR"
+      #   type: string
+      #   required: false
+      #   default: "us-east-2"
+      run-image-scan-gate-check:
+        description: "Run Image scan gate check? (yes/no)"
+        type: string
+        required: false
+        default: "yes"
+      severity-threshold:
+        description: "Fail scan if vulnerabilities at or above this severity (CRITICAL, HIGH, MEDIUM, LOW)"
+        type: string
+        required: false
+        default: "CRITICAL"
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        type: string
+        required: false
+        default: "dev"
+      PRISMA_CONSOLE_URL:
+        description: "Prisma Cloud console URL (e.g., https://clicktime.symantec.com/15xs1qkLSdD7RMDPmj4qA?h=5q0QD9QXA_WwOJcWqBOxm6i2CZ44yyF3BGzMF8OZNbQ=&u=https://us-east1.cloud.twistlock.com/us-1-123456789%29%22
+        type: string
+        required: false
+        default: "https://clicktime.symantec.com/15xrw1Z3z1XX1QPUEAfgY?h=12Tq0s6buWPTtjpcBVCxg9f_g0wR_ngLU8p1xpFdeYE=&u=https://us-east1.cloud.twistlock.com/us-1-123456789%22
+    secrets:
+      ORG_PHOENIX_APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for cross-repo access"
+      PRISMA_ACCESS_KEY:
+        required: true
+        description: "Prisma Cloud access key"
+      PRISMA_SECRET_KEY:
+        required: true
+        description: "Prisma Cloud secret key"
+    outputs:
+      SCAN_STATUS:
+        description: "Security scan status (passed/failed)"
+        value: ${{ jobs.scan-and-push.outputs.SCAN_STATUS }}
+      PUSHED_IMAGE:
+        description: "Full path of pushed image"
+        value: ${{ jobs.scan-and-push.outputs.PUSHED_IMAGE }}
+
+jobs:
+  scan-and-push:
+    name: Scan Image and Push to ECR
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+      actions: read
+    outputs:
+      SCAN_STATUS: ${{ steps.vulnerability_scan.outputs.SCAN_STATUS }}
+      PUSHED_IMAGE: ${{ steps.push_to_ecr.outputs.PUSHED_IMAGE }}
+    
+    steps:
+      # Download Docker image artifact from build workflow
+      - name: Download Docker Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      
+      # Load Docker image metadata
+      - name: Load Image Metadata
+        id: load_metadata
+        run: |
+          if [ -f image-metadata.env ]; then
+            cat image-metadata.env
+            source image-metadata.env
+            echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+            echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+            echo "ECR_REPOSITORY=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
+            echo "IMAGE_FULL_PATH=$IMAGE_FULL_PATH" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG_BRANCH=$IMAGE_TAG_BRANCH" >> $GITHUB_OUTPUT
+          else
+            # Fallback to workflow inputs
+            echo "IMAGE_TAG=${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
+            echo "ECR_REGISTRY=${{ inputs.ecr-registry }}" >> $GITHUB_OUTPUT
+            echo "ECR_REPOSITORY=${{ inputs.ecr-repository }}" >> $GITHUB_OUTPUT
+            echo "IMAGE_FULL_PATH=${{ inputs.ecr-registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG_BRANCH=${{ inputs.image-tag-branch }}" >> $GITHUB_OUTPUT
+          fi
+
+      # Load Docker image from tar archive
+      - name: Load Docker Image
+        run: |
+          if [ -f docker-image.tar ]; then
+            echo "Loading Docker image from artifact..."
+            docker load -i docker-image.tar
+            echo "✅ Docker image loaded successfully"
+            docker images
+          else
+            echo "⚠️ No docker-image.tar found. Image should be available from build step."
+          fi
+
+      # Download and setup Prisma Cloud CLI (twistcli)
+      - name: Download Prisma Cloud CLI
+        env:
+          PRISMA_CONSOLE_URL: ${{ vars.PRISMA_CONSOLE_URL }}
+          PRISMA_ACCESS_KEY: ${{ secrets.PRISMA_ACCESS_KEY }}
+          PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
+        run: |
+          echo "Downloading twistcli from Prisma Cloud Console... URL is $PRISMA_CONSOLE_URL/api/v34.03/util/twistcli"
+          
+          # Download twistcli
+          curl -k -u "$PRISMA_ACCESS_KEY:$PRISMA_SECRET_KEY" \
+            "$PRISMA_CONSOLE_URL/api/v34.03/util/twistcli" \
+            -o twistcli -v
+          
+          chmod +x twistcli
+          
+          echo "✅ twistcli downloaded successfully"
+          ./twistcli --version
+      
+      # Run Prisma Cloud vulnerability scan
+      - name: Run Prisma Cloud Vulnerability Scan
+        id: vulnerability_scan
+        env:
+          PRISMA_CONSOLE_URL: ${{ vars.PRISMA_CONSOLE_URL }}
+          PRISMA_ACCESS_KEY: ${{ secrets.PRISMA_ACCESS_KEY }}
+          PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
+        run: |
+          echo "🔍 Scanning image with Prisma Cloud..."
+          
+          IMAGE_FULL_PATH="${{ steps.load_metadata.outputs.IMAGE_FULL_PATH }}"
+          
+          # Run scan once and save both JSON and human-readable report
+          ./twistcli images scan \
+            --address "$PRISMA_CONSOLE_URL" \
+            --user "$PRISMA_ACCESS_KEY" \
+            --password "$PRISMA_SECRET_KEY" \
+            --details \
+            --output-file prisma-scan-results.json \
+            "$IMAGE_FULL_PATH" 2>&1 | tee >(sed 's/\x1b\[[0-9;]*m//g' > prisma-scan-report.txt) || true
+          
+          echo "✅ Scan completed"
+      
+      # Upload Prisma scan results as artifact
+      - name: Upload Prisma Scan Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prisma-scan-results
+          path: |
+            prisma-scan-results.json
+            prisma-scan-report.txt
+          retention-days: 30
+      
+      # Parse Prisma Cloud scan results
+      - name: Parse Scan Report
+        id: scan_report
+        run: |
+          echo "Parsing Prisma Cloud scan results..."
+          
+          # Extract vulnerability counts from JSON results
+          if [ -f prisma-scan-results.json ]; then
+            # Count critical vulnerabilities
+            CRITICAL_COUNT=$(jq -r '[.results[].vulnerabilities[]? | select(.severity == "critical")] | length' prisma-scan-results.json 2>/dev/null || echo "0")
+            
+            # Count high vulnerabilities
+            HIGH_COUNT=$(jq -r '[.results[].vulnerabilities[]? | select(.severity == "high")] | length' prisma-scan-results.json 2>/dev/null || echo "0")
+            
+            # Count medium vulnerabilities
+            MEDIUM_COUNT=$(jq -r '[.results[].vulnerabilities[]? | select(.severity == "medium")] | length' prisma-scan-results.json 2>/dev/null || echo "0")
+            
+            # Count low vulnerabilities
+            LOW_COUNT=$(jq -r '[.results[].vulnerabilities[]? | select(.severity == "low")] | length' prisma-scan-results.json 2>/dev/null || echo "0")
+            
+            # Get compliance issues count
+            COMPLIANCE_COUNT=$(jq -r '[.results[].complianceIssues[]?] | length' prisma-scan-results.json 2>/dev/null || echo "0")
+          else
+            echo "⚠️ No scan results file found, setting counts to 0"
+            CRITICAL_COUNT=0
+            HIGH_COUNT=0
+            MEDIUM_COUNT=0
+            LOW_COUNT=0
+            COMPLIANCE_COUNT=0
+          fi
+          
+          echo "CRITICAL_COUNT=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+          echo "HIGH_COUNT=$HIGH_COUNT" >> $GITHUB_OUTPUT
+          echo "MEDIUM_COUNT=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
+          echo "LOW_COUNT=$LOW_COUNT" >> $GITHUB_OUTPUT
+          echo "COMPLIANCE_COUNT=$COMPLIANCE_COUNT" >> $GITHUB_OUTPUT
+          
+          echo "Vulnerability Summary:"
+          echo "  - Critical: $CRITICAL_COUNT"
+          echo "  - High: $HIGH_COUNT"
+          echo "  - Medium: $MEDIUM_COUNT"
+          echo "  - Low: $LOW_COUNT"
+          echo "  - Compliance Issues: $COMPLIANCE_COUNT"
+
+      # Gate check - fail if threshold exceeded
+      - name: Security Gate Check
+        id: gate_check
+        if: inputs.run-image-scan-gate-check == 'yes'
+        run: |
+          CRITICAL_COUNT=${{ steps.scan_report.outputs.CRITICAL_COUNT }}
+          HIGH_COUNT=${{ steps.scan_report.outputs.HIGH_COUNT }}
+          MEDIUM_COUNT=${{ steps.scan_report.outputs.MEDIUM_COUNT }}
+          THRESHOLD="${{ inputs.severity-threshold }}"
+          
+          echo "Prisma Cloud Security Gate Check (Threshold: $THRESHOLD)"
+          echo "============================================"
+          
+          FAIL_BUILD=false
+          
+          if [ "$THRESHOLD" == "CRITICAL" ] && [ "$CRITICAL_COUNT" -gt 10 ]; then
+            echo "❌ FAILED: Found $CRITICAL_COUNT critical vulnerabilities"
+            FAIL_BUILD=true
+          elif [ "$THRESHOLD" == "HIGH" ] && [ $((CRITICAL_COUNT + HIGH_COUNT)) -gt 0 ]; then
+            echo "❌ FAILED: Found $CRITICAL_COUNT critical + $HIGH_COUNT high vulnerabilities"
+            FAIL_BUILD=true
+          elif [ "$THRESHOLD" == "MEDIUM" ] && [ $((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT)) -gt 0 ]; then
+            echo "❌ FAILED: Found vulnerabilities at or above MEDIUM severity"
+            FAIL_BUILD=true
+          elif [ "$THRESHOLD" == "LOW" ] && [ $((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT)) -gt 0 ]; then
+            echo "❌ FAILED: Found vulnerabilities at or above LOW severity"
+            FAIL_BUILD=true
+          fi
+          
+          if [ "$FAIL_BUILD" = true ]; then
+            echo "SCAN_STATUS=failed" >> $GITHUB_OUTPUT
+            echo ""
+            echo "Review the detailed scan report in the artifacts."
+            exit 1
+          else
+            echo "✅ PASSED: No vulnerabilities at or above $THRESHOLD severity"
+            echo "SCAN_STATUS=passed" >> $GITHUB_OUTPUT
+          fi
+
+      # Configure AWS credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/${{ vars.AWS_GITHUB_OIDC_ROLE }}
+          role-session-name: GHA-${{ github.run_id }}-${{ github.run_number }}-${{ github.actor }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 1800
+          mask-aws-account-id: true
+      
+      # Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Push scanned image to ECR
+      - name: Push Scanned Image to ECR
+        id: push_to_ecr
+        run: |
+          IMAGE_FULL_PATH="${{ steps.load_metadata.outputs.IMAGE_FULL_PATH }}"
+          IMAGE_TAG_BRANCH="${{ steps.load_metadata.outputs.IMAGE_TAG_BRANCH }}"
+          ECR_REGISTRY="${{ steps.load_metadata.outputs.ECR_REGISTRY }}"
+          ECR_REPOSITORY="${{ steps.load_metadata.outputs.ECR_REPOSITORY }}"
+          
+          echo "  Pushing scanned image to ECR..."
+          echo "  Primary tag: $IMAGE_FULL_PATH"
+          
+          docker push "$IMAGE_FULL_PATH"
+          echo "✅ Pushed: $IMAGE_FULL_PATH"
+          
+          # Push branch tag if available
+          if [ -n "$IMAGE_TAG_BRANCH" ]; then
+            BRANCH_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_BRANCH"
+            echo "  Branch tag: $BRANCH_IMAGE"
+            docker tag "$IMAGE_FULL_PATH" "$BRANCH_IMAGE"
+            docker push "$BRANCH_IMAGE"
+            echo "✅ Pushed: $BRANCH_IMAGE"
+          fi
+          
+          echo "PUSHED_IMAGE=$IMAGE_FULL_PATH" >> $GITHUB_OUTPUT
+          
+      # Summary
+      - name: Workflow Summary
+        if: always()
+        run: |
+          echo "## Prisma Cloud Security Scan & Push Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.load_metadata.outputs.IMAGE_FULL_PATH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Scanner:** Prisma Cloud (twistcli)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Vulnerability Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔴 Critical | ${{ steps.scan_report.outputs.CRITICAL_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟠 High | ${{ steps.scan_report.outputs.HIGH_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟡 Medium | ${{ steps.scan_report.outputs.MEDIUM_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟢 Low | ${{ steps.scan_report.outputs.LOW_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚖️ Compliance | ${{ steps.scan_report.outputs.COMPLIANCE_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Threshold:** ${{ inputs.severity-threshold }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Gate Check:** ${{ steps.gate_check.outputs.SCAN_STATUS || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f prisma-scan-report.txt ]; then
+            echo "### Detailed Scan Results" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            head -n 100 prisma-scan-report.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📎 Full scan results available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+          fi

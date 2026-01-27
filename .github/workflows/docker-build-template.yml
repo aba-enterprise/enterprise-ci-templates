@@ -1,0 +1,359 @@
+name: Reusable Docker Build
+description: Multi-language containerization pipeline supporting .NET, Java, Node.js, and Python with automated artifact building, Docker image creation, and ECR deployment
+on:
+  workflow_call:
+    inputs:
+      app-language:
+        description: "Application app-language (dotnet, java, node, python)"
+        required: true
+        type: string
+      language-version:
+        description: "Runtime version (e.g., .NET 8, Java 17, Node 20, Python 3.11)"
+        required: true
+        type: string
+      project-path:
+        description: "Project root path"
+        required: false
+        type: string
+        default: "."
+      dockerfile-path:
+        description: "Dockerfile path"
+        required: false
+        type: string
+        default: '.devops-config/docker/Dockerfile'
+      docker-tech-image-tag:
+        description: "Docker image tag"
+        required: true
+        type: string
+      # aws-region:
+      #   description: "AWS region for ECR"
+      #   required: false
+      #   type: string
+      #   default: 'us-east-2'
+      environment:
+        description: "Deployment environment (dev, qa, prod)"
+        required: true
+        type: string
+        default: 'dev'
+      image-tag:
+        description: "Optional Docker image tag (default: github.sha)"
+        required: false
+        type: string
+    secrets:
+      ORG_PHOENIX_APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for cross-repo access"
+    outputs:
+      IMAGE_TAG:
+        description: "Docker image tag used for the built image"
+        value: ${{ jobs.docker-build.outputs.IMAGE_TAG }}
+      ECR_REGISTRY:
+        description: "ECR registry URL"
+        value: ${{ jobs.docker-build.outputs.ECR_REGISTRY }}
+      ECR_REPOSITORY:
+        description: "ECR repository name"
+        value: ${{ jobs.docker-build.outputs.ECR_REPOSITORY }}
+      IMAGE_FULL_PATH:
+        description: "Full Docker image path (registry/repository:tag)"
+        value: ${{ jobs.docker-build.outputs.IMAGE_FULL_PATH }}
+
+jobs:
+  docker-build:
+    name: Build App and Docker Image
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    outputs:
+      IMAGE_TAG: ${{ steps.docker_build.outputs.IMAGE_TAG }}
+      ECR_REGISTRY: ${{ steps.docker_build.outputs.ECR_REGISTRY }}
+      ECR_REPOSITORY: ${{ steps.docker_build.outputs.ECR_REPOSITORY }}
+      IMAGE_FULL_PATH: ${{ steps.docker_build.outputs.IMAGE_FULL_PATH }}
+
+    steps:
+      # Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Generate GitHub App Token for cross-repo access
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.ORG_APP_ID }}
+          private-key: ${{ secrets.ORG_PHOENIX_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      # Download Dockerfile from Central DevOps repository
+      - name: Clone Files from Central DevOps Repository
+        run: |
+          echo "📥 Cloning central-devops-config repository..."
+          git clone --depth 1 --branch main \
+            https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/CRBG-PhoenixPOC/central-devops-config.git \
+            central-devops-config-temp
+          
+          mkdir -p .devops-config/docker ~/.m2
+          cp central-devops-config-temp/docker/Dockerfile .devops-config/docker/Dockerfile
+          
+          echo "✅ Dockerfile downloaded and copied successfully"
+          ls -la .devops-config/docker/
+
+          # mkdir -p ~/.m2
+          cp central-devops-config-temp/maven/settings.xml ~/.m2/settings.xml
+          echo "✅ Maven settings.xml configured from Central DevOps Repository"
+          
+          # Cleanup
+          rm -rf central-devops-config-temp
+
+      - name: Setup .NET SDK for Version ${{ inputs.language-version }}
+        if: ${{ inputs.app-language == 'dotnet' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.language-version }}
+      
+      - name: Cache NuGet packages
+        if: ${{ inputs.app-language == 'dotnet' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Java for Version ${{ inputs.language-version }}
+        if: ${{ inputs.app-language == 'java' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.language-version }}
+      
+      - name: Cache Maven dependencies
+        if: ${{ inputs.app-language == 'java' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            target
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Setup Node.js
+        if: ${{ inputs.app-language == 'node' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.language-version }}
+
+      - name: Setup Python
+        if: ${{ inputs.app-language == 'python' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.language-version }}
+
+      # Build artifacts → standardized output folder
+      - name: Build Artifacts for ${{ inputs.app-language }} version ${{ inputs.language-version }} and Publish to Output folder
+        id: build-artifacts
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROJECT_PATH="${{ inputs.project-path }}"
+          APP_LANGUAGE="${{ inputs.app-language }}"
+          ARTIFACT_PATH="$PROJECT_PATH/output"
+
+          # Ensure folder is clean
+          rm -rf "$ARTIFACT_PATH"
+          mkdir -p "$ARTIFACT_PATH"
+
+          echo "   Building $APP_LANGUAGE artifacts..."
+          echo "   Source: $PROJECT_PATH"
+          echo "   Target: $ARTIFACT_PATH"
+          echo "   Working directory: $(pwd)"
+
+          if [ "$APP_LANGUAGE" == "dotnet" ]; then
+              echo "Searching for .csproj file in $PROJECT_PATH..."
+              CSPROJ_FILE=$(find "$PROJECT_PATH" -maxdepth 1 -name "*.csproj" | head -n 1)
+              if [ -z "$CSPROJ_FILE" ]; then
+                  echo "   Error: No .csproj file found in $PROJECT_PATH"
+                  echo "   Please ensure the project-path input points to the correct directory"
+                  exit 1
+              fi
+              echo "Found project: $(basename "$CSPROJ_FILE")"
+              echo ""
+              echo "Restoring NuGet packages..."
+              if ! dotnet restore "$CSPROJ_FILE" --verbosity minimal; then
+                  echo "Error: NuGet restore failed"
+                  exit 1
+              fi
+              echo ""
+              echo "Publishing application (Release configuration)..."
+              if ! dotnet publish "$CSPROJ_FILE" -c Release -o "$ARTIFACT_PATH" --no-self-contained --verbosity minimal; then
+                  echo "Error: Publish failed"
+                  exit 1
+              fi
+              echo ""
+              echo "Publish completed successfully in the Output folder at path src/NewMoney.Api/output"
+              echo "Output: $ARTIFACT_PATH"
+
+          elif [ "$APP_LANGUAGE" == "java" ]; then
+            if [ -f "$PROJECT_PATH/mvnw" ]; then
+              echo "Using Maven Wrapper..."
+              "$PROJECT_PATH/mvnw" clean package -DskipTests -f "$PROJECT_PATH"
+            else
+              echo "Using system Maven..."
+              mvn -B clean package -DskipTests
+            fi
+            cp target/*.jar "$ARTIFACT_PATH/"
+
+          elif [ "$APP_LANGUAGE" == "node" ]; then
+            cd "$PROJECT_PATH"
+            npm install
+            npm run build
+            cp -r dist/* "$ARTIFACT_PATH/"
+
+          elif [ "$APP_LANGUAGE" == "python" ]; then
+            cp -r "$PROJECT_PATH"/* "$ARTIFACT_PATH/"
+
+          else
+            echo "⚠️ Unsupported app-language: $APP_LANGUAGE"
+            exit 1
+          fi
+
+          # Output for later steps
+          echo "artifact-path=output" >> $GITHUB_OUTPUT
+          
+          # Display contents of output folder
+          echo ""
+          echo "📦 Contents of output folder ($ARTIFACT_PATH):"
+          echo "================================================"
+          ls -lah "$ARTIFACT_PATH"
+          echo "================================================"
+          echo "Build artifacts ready for Docker packaging"
+
+      # Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNTID }}:role/${{ vars.AWS_GITHUB_OIDC_ROLE }}
+          role-session-name: GHA-${{ github.run_id }}-${{ github.run_number }}-${{ github.actor }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 1800
+          mask-aws-account-id: true
+      
+      # Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build Docker image (without pushing to ECR)
+      - name: Build Docker Image
+        id: docker_build
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPO=$(basename ${{ github.repository }})
+          IMAGE_TAG=${{ inputs.image-tag != '' && inputs.image-tag || github.sha }}
+          PROJECT_PATH="${{ inputs.project-path }}"
+          ARTIFACT_PATH="output"
+          APP_LANGUAGE="${{ inputs.app-language }}"
+
+          echo "Files inside context ($PROJECT_PATH):"
+          ls -la "$PROJECT_PATH"
+          ls -la "$PROJECT_PATH/output"
+
+          # Service and branch info
+          SERVICE_NAME=$(basename ${{ github.repository }})
+          BRANCH_NAME=${GITHUB_REF##*/}
+          IMAGE_TAG_SHORT=$(echo $GITHUB_SHA | cut -c1-7)
+          ENVIRONMENT=${{ inputs.environment }}
+
+          # Correct tag format
+          IMAGE_TAG="${SERVICE_NAME}-${IMAGE_TAG_SHORT}"
+          IMAGE_TAG_BRANCH="${SERVICE_NAME}-${BRANCH_NAME}"
+          echo ""
+          echo "Build context: $PROJECT_PATH"
+          echo "Artifacts path inside context: $ARTIFACT_PATH"
+          echo "Tags: $IMAGE_TAG, $IMAGE_TAG_BRANCH"
+          echo ""
+          
+          # Check if ECR repository exists, create if it doesn't
+          echo "Checking if ECR repository exists..."
+          if ! aws ecr describe-repositories --repository-names "$ECR_REPO" --region ${{ vars.AWS_REGION }} 2>/dev/null; then
+            echo "Repository $ECR_REPO does not exist. Creating..."
+            aws ecr create-repository \
+              --repository-name "$ECR_REPO" \
+              --region ${{ vars.AWS_REGION }} \
+              --encryption-configuration encryptionType=AES256
+            echo "✅ Repository created successfully"
+          else
+            echo "✅ Repository $ECR_REPO already exists"
+          fi
+
+          # Build Docker image locally (no push)
+          echo "🏗️  Building Docker image..."
+          docker build \
+            --build-arg APP_LANGUAGE="$APP_LANGUAGE" \
+            --build-arg LANGUAGE_VERSION=${{ inputs.docker-tech-image-tag }} \
+            --build-arg APP_PATH="$ARTIFACT_PATH" \
+            --build-arg ENVIRONMENT="$ENVIRONMENT" \
+            -f "${{ inputs.dockerfile-path }}" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG_BRANCH" \
+            "$PROJECT_PATH"
+          
+          echo "✅ Docker image built successfully"
+          echo "📦 Image will be scanned before pushing to ECR"
+          
+          # Save image as tar archive for scanning workflow
+          echo "💾 Saving Docker image to artifact..."
+          docker save "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" -o docker-image.tar
+          
+          # Output metadata for scan workflow
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+          echo "ECR_REPOSITORY=$ECR_REPO" >> $GITHUB_OUTPUT
+          echo "IMAGE_FULL_PATH=$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG_BRANCH=$IMAGE_TAG_BRANCH" >> $GITHUB_OUTPUT
+
+      # Save and Upload Docker Image and Metadata (for scan workflow)
+      - name: Save Docker Image Metadata
+        run: |
+          echo "IMAGE_TAG=${{ steps.docker_build.outputs.IMAGE_TAG }}" > image-metadata.env
+          echo "ECR_REGISTRY=${{ steps.docker_build.outputs.ECR_REGISTRY }}" >> image-metadata.env
+          echo "ECR_REPOSITORY=${{ steps.docker_build.outputs.ECR_REPOSITORY }}" >> image-metadata.env
+          echo "IMAGE_FULL_PATH=${{ steps.docker_build.outputs.IMAGE_FULL_PATH }}" >> image-metadata.env
+          echo "IMAGE_TAG_BRANCH=${{ steps.docker_build.outputs.IMAGE_TAG_BRANCH }}" >> image-metadata.env
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: |
+            docker-image.tar
+            image-metadata.env
+          retention-days: 3
+
+      # Save and Upload Docker Image Tag for CD Workflow (backward compatibility)
+      - name: Save Docker Image Tag
+        run: echo "IMAGE_TAG=${{ steps.docker_build.outputs.IMAGE_TAG }}" > image-tag.env
+
+      - name: Upload Image Tag Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-tag
+          path: image-tag.env
+          retention-days: 3
