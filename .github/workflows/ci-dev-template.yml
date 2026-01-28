@@ -1,0 +1,45 @@
+name: CI-Dev Pipeline
+description: Continuous integration pipeline for development builds, code quality checks, security scanning, and artifact generation
+
+on:
+  workflow_call:
+  # workflow_dispatch:
+  # push:
+  #   branches:
+  #     - feature**
+  #     - main
+  #     - develop
+  # pull_request:
+  #   types: [opened, edited, synchronize, reopened]
+  #   branches:
+  #     - main
+  #     - integration
+  #     - develop
+
+permissions:
+  security-events: write
+  actions: read
+  contents: read
+  packages: write
+  id-token: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  CI-Dev:
+    name: CI Dev Pipeline
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/main-pipeline-template.yml@main
+    with:
+      project-path: 'src/NewMoney.Api' # Project root path
+      app-language: 'dotnet' # Application app-language (dotnet, java, node, python)
+      language-version: '8.0' # Runtime version (e.g., .NET 8, Java 17, Node 20, Python 3.11)
+      environment: 'dev' # Deployment environment (dev, qa, prod)
+      run-codeql-gate-check: 'false' # Whether to run CodeQL security scans and gate checks
+      docker-tech-image-tag: '8.0' # Docker Tech Image tag to use for building and scanning
+      testProjectPath: 'src/NewMoney.UnitTest' # Path to the test project
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # SonarQube token created at environment level
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # SonarQube host URL created at environment level
+      ORG_PHOENIX_APP_PRIVATE_KEY: ${{ secrets.ORG_PHOENIX_APP_PRIVATE_KEY }} # GitHub App private key for OIDC authentication
+      PRISMA_ACCESS_KEY: ${{ secrets.PRISMA_ACCESS_KEY }} # Prisma Cloud access key
+      PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }} # Prisma Cloud secret key

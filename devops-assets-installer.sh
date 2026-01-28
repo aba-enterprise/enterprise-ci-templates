@@ -117,7 +117,7 @@ for manifest_file in ecs-manifest.yml; do
 done
 
 # Copy .gitignore file
-echo "📁 Processing .gitignore file..."
+echo "📄 Processing .gitignore file..."
 if [ -f "$TEMP_DIR/.gitignore" ]; then
     if [ ! -f ".gitignore" ]; then
         echo "  📄 Installing .gitignore"
@@ -127,6 +127,19 @@ if [ -f "$TEMP_DIR/.gitignore" ]; then
     fi
 else
     echo "  ⚠️  Warning: .gitignore not found in central repository"
+fi
+
+# Copy configure-githooks.sh file
+echo "📄 Processing configure-githooks.sh file..."
+if [ -f "$TEMP_DIR/configure-githooks.sh" ]; then
+    if [ ! -f "configure-githooks.sh" ]; then
+        echo "  📄 Installing configure-githooks.sh"
+        cp "$TEMP_DIR/configure-githooks.sh" "configure-githooks.sh"
+    else
+        echo "  ℹ️  configure-githooks.sh already exists - skipping"
+    fi
+else
+    echo "  ⚠️  Warning: configure-githooks.sh not found in central repository"
 fi
 
 # Configure Git
@@ -156,11 +169,17 @@ else
     echo "📝 .gitignore: not present in repository root"
 fi
 
+# configure-githooks.sh summary
+if [ -f "configure-githooks.sh" ]; then
+    echo "📝 configure-githooks.sh: present in repository root"
+else
+    echo "📝 configure-githooks.sh: not present in repository root"
+fi
+
 echo ""
 echo "Next steps:"
 echo "• Verify: git config --get core.hooksPath"
-echo "• Scans: ./localscans/sonarscan.sh"
+echo "• Scans: ./localscans/sonar-analysis-generic.sh or ./localscans/codeql.sh"
 echo "• Testing: git commit -m 'test: verify hooks'"
-echo "• Update: Re-run ./bootstrap.sh anytime"
 echo ""
 echo "🔒 Organizational policies are now enforced!"
