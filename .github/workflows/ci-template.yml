@@ -42,9 +42,11 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) load-ci-config  - Parse ci-config/config.yml into typed job outputs.
+  # 1) preflight  - The pipeline-config action merges the per-app
+  #    ci-config/config.yml with the central policy/ (pipeline-policy.yml +
+  #    pipeline-defaults.yml), schema-validates them, and emits typed outputs.
   # ---------------------------------------------------------------------------
-  load-ci-config:
+  preflight:
     runs-on: ${{ inputs.bootstrap-runner }}
     timeout-minutes: 5
     outputs:
@@ -65,6 +67,7 @@ jobs:
       test_project_path: ${{ steps.parse.outputs.test_project_path }}
       coverage_report: ${{ steps.parse.outputs.coverage_report }}
       dockerfile_path: ${{ steps.parse.outputs.dockerfile_path }}
+      job_timeout:     ${{ steps.parse.outputs.job_timeout }}
       # scan identifiers (from per-app config)
       sonar_project_key: ${{ steps.parse.outputs.sonar_project_key }}
       sonar_org_key:     ${{ steps.parse.outputs.sonar_org_key }}
@@ -105,154 +108,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout org policy
-        uses: actions/checkout@v4
+      - name: Load config, policy and defaults
+        id: parse
+        uses: aba-enterprise/enterprise-ci-templates/actions/pipeline-config@feature-ciconfig
         with:
-          repository: aba-enterprise/enterprise-ci-templates
-          ref: feature-ciconfig
-          path: .policy-src
-          sparse-checkout: policy
-          sparse-checkout-cone-mode: false
-
-      - id: parse
-        shell: bash
-        env:
-          CONFIG: ${{ inputs.config-path }}
-          POLICY: .policy-src/policy/pipeline-policy.yml
-          COMMON: .policy-src/policy/pipeline-defaults.yml
-          ENVIRONMENT: ${{ inputs.environment }}
-        run: |
-          set -euo pipefail
-
-          command -v yq >/dev/null 2>&1 || {
-            echo "::error::'yq' not found on the bootstrap runner image. Add it to the image."; exit 1; }
-
-          if [ ! -f "$CONFIG" ]; then
-            echo "::error::CI config not found at '$CONFIG'"; exit 1
-          fi
-          if [ ! -f "$POLICY" ]; then
-            echo "::error::pipeline-policy.yml not found — cannot run without central policy"; exit 1
-          fi
-          if [ ! -f "$COMMON" ]; then
-            echo "::error::pipeline-defaults.yml not found — cannot run without central defaults"; exit 1
-          fi
-
-          get()  { yq "$1 // \"\"" "$CONFIG"; }
-          pol()  { yq "$1 // \"\"" "$POLICY"; }
-          # shared non-secret default; usage: com '.common.runner.os'
-          com()  { yq "$1 // \"\"" "$COMMON"; }
-          # a gate is ON unless policy says gate == warn; 'required:false' disables the stage
-          gate() { [ "$(pol "$1.gate")" = "warn" ] && echo "no" || echo "yes"; }
-          reqd() { [ "$(pol "$1.required")" = "false" ] && echo "false" || echo "true"; }
-
-          # environment-scoped service endpoint; usage: envd '.vault.addr'
-          ENVIRONMENT="${ENVIRONMENT:-nonprod}"
-          if [ "$(com ".environments.${ENVIRONMENT}")" = "" ]; then
-            echo "::error::environment '${ENVIRONMENT}' not defined in pipeline-defaults.yml (expected nonprod|prod)"; exit 1
-          fi
-          envd() { yq ".environments.${ENVIRONMENT}$1 // \"\"" "$COMMON"; }
-
-          LANGUAGE=$(get '.metadata.language')
-          RUNNER_OS=$(yq '.ci.runner.os // "linux"' "$CONFIG")
-          DOCKERFILE=$(get '.build.dockerfilePath')
-          IMAGE_REPO=$(get '.scan.image.repository'); [ -n "$IMAGE_REPO" ] || IMAGE_REPO=$(get '.metadata.name')
-
-          # imageScan only applies when the app actually builds an image
-          if [ -n "$DOCKERFILE" ] && [ "$(reqd '.imageScan')" = "true" ]; then RUN_PRISMA=true; else RUN_PRISMA=false; fi
-
-          # Restore command is owned by the workflow (per language), NOT by app
-          # teams it is intentionally not read from config. Java assumes Maven.
-          case "$LANGUAGE" in
-            node)             RESTORE="npm ci" ;;
-            dotnet)           RESTORE="dotnet restore" ;;
-            java)             RESTORE="mvn -B dependency:go-offline" ;;
-            python)           RESTORE="pip install -r requirements.txt" ;;
-            dotnet-framework) RESTORE="nuget restore" ;;
-            *)                RESTORE="" ;;
-          esac
-
-          # Job timeout is owned by the workflow, NOT by app teams. Windows builds
-          # (e.g. .NET Framework) get more time; everything else uses 20 minutes.
-          if [ "$RUNNER_OS" = "windows" ]; then TIMEOUT=30; else TIMEOUT=20; fi
-
-          case "$LANGUAGE" in
-            node)   CODEQL="javascript-typescript" ;;
-            dotnet) CODEQL="csharp" ;;
-            java)   CODEQL="java-kotlin" ;;
-            python) CODEQL="python" ;;
-            *)      CODEQL="" ;;
-          esac
-
-          {
-            echo "name=$(get '.metadata.name')"
-            echo "language=${LANGUAGE}"
-            echo "language_version=$(get '.metadata.languageVersion')"
-            echo "type=$(get '.metadata.type')"
-            echo "runner_backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG")"
-            echo "runner_labels=$(yq '.ci.runner.labels // "self-hosted"' "$CONFIG")"
-            echo "runner_os=${RUNNER_OS}"
-            echo "working_dir=$(yq '.build.workingDirectory // "."' "$CONFIG")"
-            echo "restore_cmd=${RESTORE}"
-            echo "build_cmd=$(get '.build.buildCommand')"
-            echo "test_cmd=$(get '.test.command')"
-            echo "lint_cmd=$(get '.quality.lint')"
-            echo "artifact_path=$(get '.build.artifactPath')"
-            echo "project_path=$(get '.build.projectPath')"
-            echo "test_project_path=$(get '.test.testProjectPath')"
-            echo "coverage_report=$(get '.test.coverageReport')"
-            echo "dockerfile_path=${DOCKERFILE}"
-
-            # --- scan identifiers (per-app config) ---
-            echo "sonar_project_key=$(get '.scan.codeQuality.projectKey')"
-            echo "sonar_org_key=$(get '.scan.codeQuality.organizationKey')"
-            echo "sast_profile=$(get '.scan.sast.profile')"
-            echo "image_repository=${IMAGE_REPO}"
-            echo "codeql_lang=${CODEQL}"
-
-            # --- gate decisions (central policy/pipeline-policy.yml, app-immutable) ---
-            echo "gate_test=$(gate '.test')"
-            echo "gate_coverage=$(gate '.test.coverage')"
-            echo "coverage_min=$(pol '.test.coverage.minPercent')"
-            echo "run_sonar=$(reqd '.codeQuality')"
-            echo "run_sonar_gate=$(gate '.codeQuality')"
-            echo "run_veracode=$(reqd '.sast')"
-            echo "run_veracode_gate=$(gate '.sast')"
-            echo "run_prisma=${RUN_PRISMA}"
-            echo "run_prisma_gate=$(gate '.imageScan')"
-            echo "run_dependency=$(reqd '.dependencyScan')"
-            echo "run_secret=$(reqd '.secretScan')"
-            echo "run_codeql=$(reqd '.sast_codeql')"
-
-            # --- service endpoints (central policy/pipeline-defaults.yml) ---
-            echo "environment=${ENVIRONMENT}"
-            echo "registry_host=$(com '.common.registry.host')"
-            echo "registry_namespace=$(com '.common.registry.namespace')"
-            echo "sonarqube_url=$(com '.common.sonarqube.url')"
-            echo "sonarqube_quality_gate=$(com '.common.sonarqube.qualityGate')"
-            echo "veracode_api_base=$(com '.common.veracode.apiBase')"
-            echo "veracode_policy=$(com '.common.veracode.policy')"
-            echo "vault_addr=$(envd '.vault.addr')"
-            echo "vault_role=$(envd '.vault.role')"
-            echo "artifactory_url=$(envd '.artifactory.url')"
-            echo "artifactory_docker_repo=$(envd '.artifactory.dockerRepo')"
-            echo "artifactory_maven_repo=$(envd '.artifactory.mavenRepo')"
-            echo "artifactory_npm_repo=$(envd '.artifactory.npmRepo')"
-            echo "prisma_console_url=$(envd '.prisma.consoleUrl')"
-            echo "prisma_collection=$(envd '.prisma.collection')"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Parsed '${LANGUAGE}' | env=${ENVIRONMENT} backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG") os=${RUNNER_OS}"
+          config-path: ${{ inputs.config-path }}
+          environment: ${{ inputs.environment }}
 
   # ---------------------------------------------------------------------------
   # 2) build_test  - restore / lint / build / test on the app's own runner.
   #    No toolchain setup: images are pre-baked; commands use PATH.
   # ---------------------------------------------------------------------------
   Build_Test:
-    needs: load-ci-config
+    needs: preflight
     # runs-on: >-
-    #   ${{ needs.load-ci-config.outputs.runner_backend == 'codebuild'
-    #       && format('codebuild-{0}-{1}-{2}', needs.load-ci-config.outputs.runner_labels, github.run_id, github.run_attempt)
-    #       || needs.load-ci-config.outputs.runner_labels }}
+    #   ${{ needs.preflight.outputs.runner_backend == 'codebuild'
+    #       && format('codebuild-{0}-{1}-{2}', needs.preflight.outputs.runner_labels, github.run_id, github.run_attempt)
+    #       || needs.preflight.outputs.runner_labels }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -260,68 +132,68 @@ jobs:
 
       # ===================== LINUX stages (bash) =============================
       - name: Restore dependencies (linux)
-        if: needs.load-ci-config.outputs.runner_os != 'windows' && needs.load-ci-config.outputs.restore_cmd != ''
-        working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.restore_cmd != ''
+        working-directory: ${{ needs.preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.load-ci-config.outputs.restore_cmd }}" }
+        env: { CMD: "${{ needs.preflight.outputs.restore_cmd }}" }
         run: eval "$CMD"
 
       - name: Lint (linux)
-        if: needs.load-ci-config.outputs.runner_os != 'windows' && needs.load-ci-config.outputs.lint_cmd != ''
-        working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.lint_cmd != ''
+        working-directory: ${{ needs.preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.load-ci-config.outputs.lint_cmd }}" }
+        env: { CMD: "${{ needs.preflight.outputs.lint_cmd }}" }
         run: eval "$CMD"
 
       - name: Build (linux)
-        if: needs.load-ci-config.outputs.runner_os != 'windows' && needs.load-ci-config.outputs.build_cmd != ''
-        working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.build_cmd != ''
+        working-directory: ${{ needs.preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.load-ci-config.outputs.build_cmd }}" }
+        env: { CMD: "${{ needs.preflight.outputs.build_cmd }}" }
         run: eval "$CMD"
 
       - name: Test (linux)
-        if: needs.load-ci-config.outputs.runner_os != 'windows' && needs.load-ci-config.outputs.test_cmd != ''
-        working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.test_cmd != ''
+        working-directory: ${{ needs.preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.load-ci-config.outputs.test_cmd }}" }
+        env: { CMD: "${{ needs.preflight.outputs.test_cmd }}" }
         run: eval "$CMD"
 
   #     # ===================== WINDOWS stages (powershell) =====================
   #     - name: Restore dependencies (windows)
-  #       if: needs.load-ci-config.outputs.runner_os == 'windows' && needs.load-ci-config.outputs.restore_cmd != ''
-  #       working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.restore_cmd != ''
+  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.load-ci-config.outputs.restore_cmd }}" }
+  #       env: { CMD: "${{ needs.preflight.outputs.restore_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Lint (windows)
-  #       if: needs.load-ci-config.outputs.runner_os == 'windows' && needs.load-ci-config.outputs.lint_cmd != ''
-  #       working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.lint_cmd != ''
+  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.load-ci-config.outputs.lint_cmd }}" }
+  #       env: { CMD: "${{ needs.preflight.outputs.lint_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Build (windows)
-  #       if: needs.load-ci-config.outputs.runner_os == 'windows' && needs.load-ci-config.outputs.build_cmd != ''
-  #       working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.build_cmd != ''
+  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.load-ci-config.outputs.build_cmd }}" }
+  #       env: { CMD: "${{ needs.preflight.outputs.build_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Test (windows)
-  #       if: needs.load-ci-config.outputs.runner_os == 'windows' && needs.load-ci-config.outputs.test_cmd != ''
-  #       working-directory: ${{ needs.load-ci-config.outputs.working_dir }}
+  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.test_cmd != ''
+  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.load-ci-config.outputs.test_cmd }}" }
+  #       env: { CMD: "${{ needs.preflight.outputs.test_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Upload build artifact
-  #       if: needs.load-ci-config.outputs.artifact_path != ''
+  #       if: needs.preflight.outputs.artifact_path != ''
   #       uses: actions/upload-artifact@v4
   #       with:
-  #         name: ${{ needs.load-ci-config.outputs.name }}-build
-  #         path: ${{ needs.load-ci-config.outputs.artifact_path }}
+  #         name: ${{ needs.preflight.outputs.name }}-build
+  #         path: ${{ needs.preflight.outputs.artifact_path }}
   #         if-no-files-found: ignore
   #         retention-days: 7
 
@@ -330,7 +202,7 @@ jobs:
   # #    CodeQL relies on toolchains already present on the bootstrap image.
   # # ---------------------------------------------------------------------------
   # security:
-  #   needs: load-ci-config
+  #   needs: preflight
   #   runs-on: ${{ inputs.bootstrap-runner }}
   #   timeout-minutes: 15
   #   permissions:
@@ -340,25 +212,25 @@ jobs:
   #     - uses: actions/checkout@v4
 
   #     - name: Secret scan (gitleaks)
-  #       if: needs.load-ci-config.outputs.sec_secret == 'true'
+  #       if: needs.preflight.outputs.sec_secret == 'true'
   #       uses: gitleaks/gitleaks-action@v2
   #       env:
   #         GITHUB_TOKEN: ${{ github.token }}
 
   #     - name: Dependency review
-  #       if: needs.load-ci-config.outputs.sec_dependency == 'true' && github.event_name == 'pull_request'
+  #       if: needs.preflight.outputs.sec_dependency == 'true' && github.event_name == 'pull_request'
   #       uses: actions/dependency-review-action@v4
 
   #     - name: Initialize CodeQL
-  #       if: needs.load-ci-config.outputs.sec_sast == 'true' && needs.load-ci-config.outputs.codeql_lang != ''
+  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/init@v3
   #       with:
-  #         languages: ${{ needs.load-ci-config.outputs.codeql_lang }}
+  #         languages: ${{ needs.preflight.outputs.codeql_lang }}
 
   #     - name: CodeQL autobuild
-  #       if: needs.load-ci-config.outputs.sec_sast == 'true' && needs.load-ci-config.outputs.codeql_lang != ''
+  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/autobuild@v3
 
   #     - name: CodeQL analyze
-  #       if: needs.load-ci-config.outputs.sec_sast == 'true' && needs.load-ci-config.outputs.codeql_lang != ''
+  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/analyze@v3

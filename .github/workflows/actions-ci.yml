@@ -1,0 +1,64 @@
+name: actions (TS)
+
+# Lint + test + build every action in the actions/ workspace, verify each
+# committed dist/ is fresh, then smoke-test the built actions.
+
+on:
+  pull_request:
+    paths:
+      - "actions/**"
+      - "policy/**"
+      - ".github/workflows/actions-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: actions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: actions/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Fail if any dist/ is stale
+        run: |
+          if ! git diff --quiet --exit-code -- '*/dist/'; then
+            echo "::error::a committed dist/ is out of date — run 'npm run build' in actions/ and commit."
+            git -C "$GITHUB_WORKSPACE" diff --stat -- 'actions/*/dist/'
+            exit 1
+          fi
+
+  smoke:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: cfg
+        uses: ./actions/pipeline-config
+        with:
+          config-path: actions/pipeline-config/test/fixtures/config.dotnet.yml
+          environment: prod
+      - name: Assert resolved outputs
+        run: |
+          echo "language=${{ steps.cfg.outputs.language }}"
+          echo "coverage_min=${{ steps.cfg.outputs.coverage_min }}"
+          echo "vault_addr=${{ steps.cfg.outputs.vault_addr }}"
+          echo "artifactory_maven_repo=${{ steps.cfg.outputs.artifactory_maven_repo }}"
+          [ "${{ steps.cfg.outputs.language }}" = "dotnet" ]
+          [ -n "${{ steps.cfg.outputs.coverage_min }}" ]
+          [ "${{ steps.cfg.outputs.environment }}" = "prod" ]
+          [ "${{ steps.cfg.outputs.artifactory_maven_repo }}" = "libs-release" ]

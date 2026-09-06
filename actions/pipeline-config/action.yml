@@ -1,0 +1,85 @@
+name: "Pipeline config"
+description: >
+  Load the per-app ci-config/config.yml, merge it with the central
+  policy/pipeline-policy.yml (gates) and policy/pipeline-defaults.yml
+  (non-secret defaults), validate every file against its JSON Schema, and
+  expose the resolved values as typed step outputs. Replaces the inline
+  yq/bash block in the reusable pipeline workflows — no yq needed on the runner.
+
+inputs:
+  config-path:
+    description: "Path to the per-repo CI values file, relative to the workspace."
+    required: false
+    default: ci-config/config.yml
+  environment:
+    description: "Deploy target for environment-scoped endpoints (nonprod | prod)."
+    required: false
+    default: nonprod
+  policy-path:
+    description: "Override path to pipeline-policy.yml (defaults to the copy bundled with this action)."
+    required: false
+    default: ""
+  defaults-path:
+    description: "Override path to pipeline-defaults.yml (defaults to the copy bundled with this action)."
+    required: false
+    default: ""
+
+outputs:
+  # --- app identity / build (per-app config) ---
+  name:             { description: "metadata.name" }
+  language:         { description: "metadata.language" }
+  language_version: { description: "metadata.languageVersion" }
+  type:             { description: "metadata.type" }
+  runner_backend:   { description: "ci.runner.backend (default codebuild)" }
+  runner_labels:    { description: "ci.runner.labels (default self-hosted)" }
+  runner_os:        { description: "ci.runner.os (default linux)" }
+  working_dir:      { description: "build.workingDirectory (default .)" }
+  restore_cmd:      { description: "per-language restore command (workflow-owned)" }
+  build_cmd:        { description: "build.buildCommand" }
+  test_cmd:         { description: "test.command" }
+  lint_cmd:         { description: "quality.lint" }
+  artifact_path:    { description: "build.artifactPath" }
+  project_path:     { description: "build.projectPath" }
+  test_project_path: { description: "test.testProjectPath" }
+  coverage_report:  { description: "test.coverageReport" }
+  dockerfile_path:  { description: "build.dockerfilePath" }
+  job_timeout:      { description: "job timeout in minutes (workflow-owned; 30 on windows)" }
+  # --- scan identifiers (per-app config) ---
+  sonar_project_key: { description: "scan.codeQuality.projectKey" }
+  sonar_org_key:     { description: "scan.codeQuality.organizationKey" }
+  sast_profile:      { description: "scan.sast.profile" }
+  image_repository:  { description: "scan.image.repository (falls back to metadata.name)" }
+  codeql_lang:       { description: "CodeQL language for the app language" }
+  # --- gate decisions (central pipeline-policy.yml, app-immutable) ---
+  gate_test:         { description: "yes|no — block on unit test failure" }
+  gate_coverage:     { description: "yes|no — block on coverage below floor" }
+  coverage_min:      { description: "org-wide coverage floor (percent)" }
+  run_sonar:         { description: "true|false — SonarQube stage enabled" }
+  run_sonar_gate:    { description: "yes|no — SonarQube quality gate blocks" }
+  run_veracode:      { description: "true|false — Veracode stage enabled" }
+  run_veracode_gate: { description: "yes|no — Veracode policy blocks" }
+  run_prisma:        { description: "true|false — image scan (dockerfile present AND required)" }
+  run_prisma_gate:   { description: "yes|no — Prisma severity gate blocks" }
+  run_dependency:    { description: "true|false — dependency review enabled" }
+  run_secret:        { description: "true|false — secret scan enabled" }
+  run_codeql:        { description: "true|false — secondary CodeQL SAST enabled" }
+  # --- service endpoints (central pipeline-defaults.yml) ---
+  environment:            { description: "resolved environment name" }
+  registry_host:          { description: "common.registry.host" }
+  registry_namespace:     { description: "common.registry.namespace" }
+  sonarqube_url:           { description: "common.sonarqube.url" }
+  sonarqube_quality_gate:  { description: "common.sonarqube.qualityGate" }
+  veracode_api_base:       { description: "common.veracode.apiBase" }
+  veracode_policy:         { description: "common.veracode.policy" }
+  vault_addr:              { description: "environments.<env>.vault.addr" }
+  vault_role:              { description: "environments.<env>.vault.role" }
+  artifactory_url:         { description: "environments.<env>.artifactory.url" }
+  artifactory_docker_repo: { description: "environments.<env>.artifactory.dockerRepo" }
+  artifactory_maven_repo:  { description: "environments.<env>.artifactory.mavenRepo" }
+  artifactory_npm_repo:    { description: "environments.<env>.artifactory.npmRepo" }
+  prisma_console_url:      { description: "environments.<env>.prisma.consoleUrl" }
+  prisma_collection:       { description: "environments.<env>.prisma.collection" }
+
+runs:
+  using: node24
+  main: dist/index.js

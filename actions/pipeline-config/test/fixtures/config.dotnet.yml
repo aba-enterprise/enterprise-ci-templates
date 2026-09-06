@@ -1,0 +1,17 @@
+# Fixture consumed by the action's smoke test in CI. Not a real app config.
+metadata:
+  name: sample-service
+  language: dotnet
+  languageVersion: "8.0"
+  type: service
+build:
+  dockerfilePath: Dockerfile
+  buildCommand: dotnet build --configuration Release
+  projectPath: src/sample-service/sample-service.csproj
+test:
+  command: dotnet test --configuration Release
+  testProjectPath: src/sample-service.Tests
+scan:
+  codeQuality:
+    projectKey: aba_sample-service
+    organizationKey: aba-enterprise

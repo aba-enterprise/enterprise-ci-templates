@@ -29,6 +29,24 @@ kind: PipelineDefaults
 # ===========================================================================
 common:
 
+  # Container registry (image name/tag still come from the app config).
+  registry:
+    host: ghcr.io
+    namespace: aba-enterprise
+
+  # Default runner selection. An app config.yml may override labels/os only
+  # where the workflow allows it.
+  runner:
+    backend: codebuild
+    labels: self-hosted
+    os: linux
+
+  # CI job defaults owned by the platform, not by app teams.
+  build:
+    jobTimeoutMinutes: 20
+    windowsJobTimeoutMinutes: 30
+    artifactRetentionDays: 7
+
   # SonarQube — one enterprise instance for the whole org.
   sonarqube:
     url: "https://sonarqube.aba-enterprise.internal"
