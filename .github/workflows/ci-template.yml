@@ -22,7 +22,7 @@ on:
       config-path:
         description: "Path to the per-repo CI values file."
         type: string
-        default: CiConfig/config.yml
+        default: ci-config/config.yml
       bootstrap-runner:
         description: >
           Runner label for the lightweight Linux helper jobs (config, security).
@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) load-ci-config  - Parse CiConfig/config.yml into typed job outputs.
+  # 1) load-ci-config  - Parse ci-config/config.yml into typed job outputs.
   # ---------------------------------------------------------------------------
   load-ci-config:
     runs-on: ${{ inputs.bootstrap-runner }}
@@ -43,6 +43,7 @@ jobs:
     outputs:
       name:            ${{ steps.parse.outputs.name }}
       language:        ${{ steps.parse.outputs.language }}
+      language_version: ${{ steps.parse.outputs.language_version }}
       type:            ${{ steps.parse.outputs.type }}
       runner_backend:  ${{ steps.parse.outputs.runner_backend }}
       runner_labels:   ${{ steps.parse.outputs.runner_labels }}
@@ -53,17 +54,48 @@ jobs:
       test_cmd:        ${{ steps.parse.outputs.test_cmd }}
       lint_cmd:        ${{ steps.parse.outputs.lint_cmd }}
       artifact_path:   ${{ steps.parse.outputs.artifact_path }}
-      sec_dependency:  ${{ steps.parse.outputs.sec_dependency }}
-      sec_secret:      ${{ steps.parse.outputs.sec_secret }}
-      sec_sast:        ${{ steps.parse.outputs.sec_sast }}
-      codeql_lang:     ${{ steps.parse.outputs.codeql_lang }}
+      project_path:    ${{ steps.parse.outputs.project_path }}
+      test_project_path: ${{ steps.parse.outputs.test_project_path }}
+      coverage_report: ${{ steps.parse.outputs.coverage_report }}
+      dockerfile_path: ${{ steps.parse.outputs.dockerfile_path }}
+      # scan identifiers (from per-app config)
+      sonar_project_key: ${{ steps.parse.outputs.sonar_project_key }}
+      sonar_org_key:     ${{ steps.parse.outputs.sonar_org_key }}
+      sast_profile:      ${{ steps.parse.outputs.sast_profile }}
+      image_repository:  ${{ steps.parse.outputs.image_repository }}
+      codeql_lang:       ${{ steps.parse.outputs.codeql_lang }}
+      # gate decisions (from central org-policy.yml — NOT app-overridable)
+      gate_test:        ${{ steps.parse.outputs.gate_test }}
+      gate_coverage:    ${{ steps.parse.outputs.gate_coverage }}
+      coverage_min:     ${{ steps.parse.outputs.coverage_min }}
+      run_sonar:        ${{ steps.parse.outputs.run_sonar }}
+      run_sonar_gate:   ${{ steps.parse.outputs.run_sonar_gate }}
+      run_veracode:     ${{ steps.parse.outputs.run_veracode }}
+      run_veracode_gate: ${{ steps.parse.outputs.run_veracode_gate }}
+      run_prisma:       ${{ steps.parse.outputs.run_prisma }}
+      run_prisma_gate:  ${{ steps.parse.outputs.run_prisma_gate }}
+      run_dependency:   ${{ steps.parse.outputs.run_dependency }}
+      run_secret:       ${{ steps.parse.outputs.run_secret }}
+      run_codeql:       ${{ steps.parse.outputs.run_codeql }}
     steps:
       - uses: actions/checkout@v4
+
+      # Central, app-immutable policy. Checked out from THIS templates repo so no
+      # app repo can change which gates run or lower a threshold.
+      - name: Checkout org policy
+        uses: actions/checkout@v4
+        with:
+          repository: aba-enterprise/enterprise-ci-templates
+          ref: main
+          path: .org-policy-src
+          sparse-checkout: org-policy.yml
+          sparse-checkout-cone-mode: false
 
       - id: parse
         shell: bash
         env:
           CONFIG: ${{ inputs.config-path }}
+          POLICY: .org-policy-src/org-policy.yml
         run: |
           set -euo pipefail
 
@@ -73,11 +105,23 @@ jobs:
           if [ ! -f "$CONFIG" ]; then
             echo "::error::CI config not found at '$CONFIG'"; exit 1
           fi
+          if [ ! -f "$POLICY" ]; then
+            echo "::error::org-policy.yml not found — cannot run without central policy"; exit 1
+          fi
 
-          get() { yq "$1 // \"\"" "$CONFIG"; }
+          get()  { yq "$1 // \"\"" "$CONFIG"; }
+          pol()  { yq "$1 // \"\"" "$POLICY"; }
+          # a gate is ON unless policy says gate == warn; 'required:false' disables the stage
+          gate() { [ "$(pol "$1.gate")" = "warn" ] && echo "no" || echo "yes"; }
+          reqd() { [ "$(pol "$1.required")" = "false" ] && echo "false" || echo "true"; }
 
           LANGUAGE=$(get '.metadata.language')
           RUNNER_OS=$(yq '.ci.runner.os // "linux"' "$CONFIG")
+          DOCKERFILE=$(get '.build.dockerfilePath')
+          IMAGE_REPO=$(get '.scan.image.repository'); [ -n "$IMAGE_REPO" ] || IMAGE_REPO=$(get '.metadata.name')
+
+          # imageScan only applies when the app actually builds an image
+          if [ -n "$DOCKERFILE" ] && [ "$(reqd '.imageScan')" = "true" ]; then RUN_PRISMA=true; else RUN_PRISMA=false; fi
 
           # Restore command is owned by the workflow (per language), NOT by app
           # teams it is intentionally not read from config. Java assumes Maven.
@@ -105,6 +149,7 @@ jobs:
           {
             echo "name=$(get '.metadata.name')"
             echo "language=${LANGUAGE}"
+            echo "language_version=$(get '.metadata.languageVersion')"
             echo "type=$(get '.metadata.type')"
             echo "runner_backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG")"
             echo "runner_labels=$(yq '.ci.runner.labels // "self-hosted"' "$CONFIG")"
@@ -115,10 +160,31 @@ jobs:
             echo "test_cmd=$(get '.test.command')"
             echo "lint_cmd=$(get '.quality.lint')"
             echo "artifact_path=$(get '.build.artifactPath')"
-            echo "sec_dependency=$(yq '.security.dependencyScan // false' "$CONFIG")"
-            echo "sec_secret=$(yq '.security.secretScan // false' "$CONFIG")"
-            echo "sec_sast=$(yq '.security.sast // false' "$CONFIG")"
+            echo "project_path=$(get '.build.projectPath')"
+            echo "test_project_path=$(get '.test.testProjectPath')"
+            echo "coverage_report=$(get '.test.coverageReport')"
+            echo "dockerfile_path=${DOCKERFILE}"
+
+            # --- scan identifiers (per-app config) ---
+            echo "sonar_project_key=$(get '.scan.codeQuality.projectKey')"
+            echo "sonar_org_key=$(get '.scan.codeQuality.organizationKey')"
+            echo "sast_profile=$(get '.scan.sast.profile')"
+            echo "image_repository=${IMAGE_REPO}"
             echo "codeql_lang=${CODEQL}"
+
+            # --- gate decisions (central org-policy.yml, app-immutable) ---
+            echo "gate_test=$(gate '.test')"
+            echo "gate_coverage=$(gate '.test.coverage')"
+            echo "coverage_min=$(pol '.test.coverage.minPercent')"
+            echo "run_sonar=$(reqd '.codeQuality')"
+            echo "run_sonar_gate=$(gate '.codeQuality')"
+            echo "run_veracode=$(reqd '.sast')"
+            echo "run_veracode_gate=$(gate '.sast')"
+            echo "run_prisma=${RUN_PRISMA}"
+            echo "run_prisma_gate=$(gate '.imageScan')"
+            echo "run_dependency=$(reqd '.dependencyScan')"
+            echo "run_secret=$(reqd '.secretScan')"
+            echo "run_codeql=$(reqd '.sast_codeql')"
           } >> "$GITHUB_OUTPUT"
 
           echo "Parsed '${LANGUAGE}' | backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG") os=${RUNNER_OS}"

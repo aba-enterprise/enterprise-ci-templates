@@ -66,7 +66,7 @@ on:
       config-path:
         description: "Path to the per-repo CI values file."
         type: string
-        default: CiConfig/config.yml
+        default: ci-config/config.yml
     secrets:
       SONAR_TOKEN:
         required: true
@@ -138,7 +138,7 @@ jobs:
   ci:
     name: Build & Push Image to ECR
     needs: [Sonarqube-scan, Veracode-scan, Codeql-scan]
-    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ci-template.yml@feature-ciconfig
+    uses: aba-enterprise/enterprise-ci-templates/.github/workflows/ci-template.yml@feature-ci-config
     with:
       
     secrets: inherit

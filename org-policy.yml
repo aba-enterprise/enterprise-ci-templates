@@ -1,0 +1,100 @@
+# =============================================================================
+#  org-policy.yml  —  MANDATORY CI policy for every application.
+#
+#  Owned by:  Platform / AppSec.
+#  Lives in:  aba-enterprise/enterprise-ci-templates  (this repo), NOT in app
+#             repos — so application teams cannot edit, disable, or lower a gate.
+#
+#  The reusable CI workflow reads THIS file to decide which scans run and what
+#  blocks a merge. The per-app ci-config/config.yml supplies only identifiers
+#  and commands (project keys, image name, test command) — never a gate switch.
+#
+#  Swapping a tool is a one-line change here (`tool:` + its `with:` mapping).
+#  App config.yml files never change, because their keys are named by function
+#  (scan.codeQuality / scan.sast / scan.image), not by product name.
+#
+#  The ONLY way past a gate is a signed, time-boxed waiver (see `exceptions`).
+# =============================================================================
+apiVersion: org-policy/v1
+
+# ---------------------------------------------------------------------------
+# Unit tests + coverage.  Runs for every app; an empty test.command in a
+# repo's config.yml FAILS the pipeline (it is not an opt-out).
+# ---------------------------------------------------------------------------
+test:
+  required: true
+  gate: block                     # block | warn
+  coverage:
+    enforce: true
+    minPercent: 80                # single org-wide floor; apps may not lower it
+    gate: block
+
+# ---------------------------------------------------------------------------
+# Code quality + coverage platform.
+# ---------------------------------------------------------------------------
+codeQuality:
+  required: true
+  tool: sonarqube                 # swap here only
+  gate: block
+  reusableWorkflow: .github/workflows/sonarqube-template-m.yml
+  with:
+    qualityGate: "Enterprise Default"
+    runGateCheck: "yes"           # feeds run-sonarqube-gate-check (forced on)
+
+# ---------------------------------------------------------------------------
+# SAST / application security policy.
+# ---------------------------------------------------------------------------
+sast:
+  required: true
+  tool: veracode                  # swap here only (e.g. checkmarx)
+  gate: block
+  reusableWorkflow: .github/workflows/veracode-baseline-scan-template.yml
+  with:
+    failOnSeverity: [critical, high]
+    policy: "Enterprise Default"
+    runGateCheck: "yes"           # feeds run-veracode-gate-check (forced on)
+
+# ---------------------------------------------------------------------------
+# Container image vulnerability scan.  The workflow — not the app — decides
+# this applies whenever build.dockerfilePath is set.
+# ---------------------------------------------------------------------------
+imageScan:
+  required: true
+  tool: prisma                    # swap here only (e.g. trivy, aqua)
+  gate: block
+  reusableWorkflow: .github/workflows/prisma-scan-template.yml
+  appliesWhen:
+    dockerfilePresent: true
+  with:
+    failOnSeverity: [critical, high]
+    runGateCheck: "yes"           # feeds run-prisma-gate-check (forced on)
+
+# ---------------------------------------------------------------------------
+# Supply-chain / secret hygiene.  Always on; needs no per-app input.
+# ---------------------------------------------------------------------------
+dependencyScan:
+  required: true
+  tool: github-dependency-review
+  gate: block
+  event: pull_request
+
+secretScan:
+  required: true
+  tool: gitleaks
+  gate: block
+
+sast_codeql:
+  # Kept as a secondary SAST for languages Veracode covers weakly. Skipped
+  # automatically for .NET Framework (Windows-only build).
+  required: false
+  tool: codeql
+  gate: warn
+
+# ---------------------------------------------------------------------------
+# Exceptions — the ONLY bypass. Time-boxed, reviewed, and audited.
+# ---------------------------------------------------------------------------
+exceptions:
+  mechanism: waiver-file          # .ci/waivers/<gate>.yml in the app repo
+  approvedBy: appsec-codeowners   # CODEOWNERS entry, enforced by branch protection
+  maxDurationDays: 30
+  audit: required
