@@ -141,12 +141,12 @@ jobs:
       - uses: actions/checkout@v4
 
       # ===================== LINUX stages (bash) =============================
-      # - name: Install (linux)
-      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.install_cmd != ''
-      #   working-directory: ${{ needs.config.outputs.working_dir }}
-      #   shell: bash
-      #   env: { CMD: "${{ needs.config.outputs.install_cmd }}" }
-      #   run: eval "$CMD"
+      - name: Install (linux)
+        if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.install_cmd != ''
+        working-directory: ${{ needs.config.outputs.working_dir }}
+        shell: bash
+        env: { CMD: "${{ needs.config.outputs.install_cmd }}" }
+        run: eval "$CMD"
 
       # - name: Lint (linux)
       #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.lint_cmd != ''
