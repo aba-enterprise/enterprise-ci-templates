@@ -148,12 +148,12 @@ jobs:
         env: { CMD: "${{ needs.config.outputs.install_cmd }}" }
         run: eval "$CMD"
 
-      # - name: Lint (linux)
-      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.lint_cmd != ''
-      #   working-directory: ${{ needs.config.outputs.working_dir }}
-      #   shell: bash
-      #   env: { CMD: "${{ needs.config.outputs.lint_cmd }}" }
-      #   run: eval "$CMD"
+      - name: Lint (linux)
+        if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.lint_cmd != ''
+        working-directory: ${{ needs.config.outputs.working_dir }}
+        shell: bash
+        env: { CMD: "${{ needs.config.outputs.lint_cmd }}" }
+        run: eval "$CMD"
 
       - name: Build (linux)
         if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.build_cmd != ''
@@ -162,12 +162,12 @@ jobs:
         env: { CMD: "${{ needs.config.outputs.build_cmd }}" }
         run: eval "$CMD"
 
-      # - name: Test (linux)
-      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.test_cmd != ''
-      #   working-directory: ${{ needs.config.outputs.working_dir }}
-      #   shell: bash
-      #   env: { CMD: "${{ needs.config.outputs.test_cmd }}" }
-      #   run: eval "$CMD"
+      - name: Test (linux)
+        if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.test_cmd != ''
+        working-directory: ${{ needs.config.outputs.working_dir }}
+        shell: bash
+        env: { CMD: "${{ needs.config.outputs.test_cmd }}" }
+        run: eval "$CMD"
 
   #     # ===================== WINDOWS stages (powershell) =====================
   #     - name: Install (windows)
