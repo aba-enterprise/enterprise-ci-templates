@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/pipeline-defaults.schema.json",
+  "title": "PipelineDefaults",
+  "description": "Shared, non-secret pipeline defaults. Consumed by the reusable pipeline workflows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "common", "environments"],
+  "properties": {
+    "apiVersion": { "const": "pipeline.aba-enterprise/v1" },
+    "kind": { "const": "PipelineDefaults" },
+
+    "common": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry", "runner", "build", "sonarqube", "veracode"],
+      "properties": {
+        "registry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["host", "namespace"],
+          "properties": {
+            "host": { "type": "string", "minLength": 1 },
+            "namespace": { "type": "string", "minLength": 1 }
+          }
+        },
+        "runner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["backend", "labels", "os"],
+          "properties": {
+            "backend": { "type": "string", "minLength": 1 },
+            "labels": { "type": "string", "minLength": 1 },
+            "os": { "enum": ["linux", "windows", "macos"] }
+          }
+        },
+        "build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jobTimeoutMinutes", "windowsJobTimeoutMinutes", "artifactRetentionDays"],
+          "properties": {
+            "jobTimeoutMinutes": { "type": "integer", "minimum": 1, "maximum": 360 },
+            "windowsJobTimeoutMinutes": { "type": "integer", "minimum": 1, "maximum": 360 },
+            "artifactRetentionDays": { "type": "integer", "minimum": 1, "maximum": 90 }
+          }
+        },
+        "sonarqube": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "qualityGate"],
+          "properties": {
+            "url": { "$ref": "#/$defs/httpsUrl" },
+            "qualityGate": { "type": "string", "minLength": 1 }
+          }
+        },
+        "veracode": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apiBase", "policy"],
+          "properties": {
+            "apiBase": { "$ref": "#/$defs/httpsUrl" },
+            "policy": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonprod", "prod"],
+      "properties": {
+        "nonprod": { "$ref": "#/$defs/environment" },
+        "prod": { "$ref": "#/$defs/environment" }
+      }
+    }
+  },
+
+  "$defs": {
+    "httpsUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vault", "artifactory", "prisma"],
+      "properties": {
+        "vault": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["addr", "role"],
+          "properties": {
+            "addr": { "$ref": "#/$defs/httpsUrl" },
+            "role": { "type": "string", "minLength": 1 }
+          }
+        },
+        "artifactory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "dockerRepo", "mavenRepo", "npmRepo"],
+          "properties": {
+            "url": { "$ref": "#/$defs/httpsUrl" },
+            "dockerRepo": { "type": "string", "minLength": 1 },
+            "mavenRepo": { "type": "string", "minLength": 1 },
+            "npmRepo": { "type": "string", "minLength": 1 }
+          }
+        },
+        "prisma": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["consoleUrl", "collection"],
+          "properties": {
+            "consoleUrl": { "$ref": "#/$defs/httpsUrl" },
+            "collection": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

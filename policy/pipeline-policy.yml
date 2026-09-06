@@ -1,13 +1,19 @@
 # =============================================================================
-#  org-policy.yml  —  MANDATORY CI policy for every application.
+#  pipeline-policy.yml  —  MANDATORY CI/CD policy for every application.
 #
 #  Owned by:  Platform / AppSec.
-#  Lives in:  aba-enterprise/enterprise-ci-templates  (this repo), NOT in app
-#             repos — so application teams cannot edit, disable, or lower a gate.
+#  Lives in:  aba-enterprise/enterprise-ci-templates/policy/  (this repo), NOT in
+#             app repos — so application teams cannot edit, disable, or lower a
+#             gate. Shared non-secret defaults live beside it in
+#             policy/pipeline-defaults.yml.
 #
-#  The reusable CI workflow reads THIS file to decide which scans run and what
-#  blocks a merge. The per-app ci-config/config.yml supplies only identifiers
-#  and commands (project keys, image name, test command) — never a gate switch.
+#  Validated in this repo's CI against policy/schema/pipeline-policy.schema.json
+#  on every PR — a malformed gate switch cannot ship org-wide.
+#
+#  The reusable pipeline workflows read THIS file to decide which scans run and
+#  what blocks a merge or deploy. The per-app ci-config/config.yml supplies only
+#  identifiers and commands (project keys, image name, test command) — never a
+#  gate switch.
 #
 #  Swapping a tool is a one-line change here (`tool:` + its `with:` mapping).
 #  App config.yml files never change, because their keys are named by function
@@ -15,7 +21,8 @@
 #
 #  The ONLY way past a gate is a signed, time-boxed waiver (see `exceptions`).
 # =============================================================================
-apiVersion: org-policy/v1
+apiVersion: pipeline.aba-enterprise/v1
+kind: PipelinePolicy
 
 # ---------------------------------------------------------------------------
 # Unit tests + coverage.  Runs for every app; an empty test.command in a

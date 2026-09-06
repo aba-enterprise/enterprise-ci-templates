@@ -1,0 +1,74 @@
+# =============================================================================
+#  pipeline-defaults.yml  —  shared, NON-SECRET defaults for every app pipeline.
+#
+#  Owned by:  Platform / AppSec  (same as pipeline-policy.yml).
+#
+#  Purpose: single source of truth for values that are the same across all
+#  apps and that app teams should not have to (or be able to) redefine in
+#  their ci-config/config.yml. Gate switches do NOT belong here — see
+#  pipeline-policy.yml for anything that can block a merge or deploy.
+#
+#  Validated against policy/schema/pipeline-defaults.schema.json in this repo's CI.
+#
+#  ---------------------------------------------------------------------------
+#  Structure:
+#    common        — values identical in every environment (registry, runner,
+#                    job limits, and services that run ONE global instance:
+#                    SonarQube, Veracode).
+#    environments  — values that differ by deploy target. The reusable
+#                    workflow selects `nonprod` for CI and lower-env deploys,
+#                    `prod` for production promotion:
+#                        com ".environments.${ENV}.vault.addr"
+#  ---------------------------------------------------------------------------
+
+apiVersion: pipeline.aba-enterprise/v1
+kind: PipelineDefaults
+
+# ===========================================================================
+# common — identical in every environment
+# ===========================================================================
+common:
+
+  # SonarQube — one enterprise instance for the whole org.
+  sonarqube:
+    url: "https://sonarqube.aba-enterprise.internal"
+    qualityGate: "Enterprise Default"
+
+  # Veracode — global SaaS; the same API base for every environment.
+  veracode:
+    apiBase: "https://api.veracode.com"
+    policy: "Enterprise Default"
+
+# ===========================================================================
+# environments — differ by deploy target (nonprod | prod)
+# ===========================================================================
+environments:
+
+  nonprod:
+    # HashiCorp Vault — separate cluster/namespace per environment.
+    vault:
+      addr: "https://vault.nonprod.aba-enterprise.internal:8200"
+      role: "ci-nonprod"
+    # JFrog Artifactory — one instance, environment-scoped repositories.
+    artifactory:
+      url: "https://artifactory.aba-enterprise.com/artifactory"
+      dockerRepo: "docker-nonprod"
+      mavenRepo: "libs-snapshot"
+      npmRepo: "npm-nonprod"
+    # Prisma Cloud — one console; environment-scoped collection.
+    prisma:
+      consoleUrl: "https://prisma.aba-enterprise.internal"
+      collection: "nonprod"
+
+  prod:
+    vault:
+      addr: "https://vault.prod.aba-enterprise.internal:8200"
+      role: "ci-prod"
+    artifactory:
+      url: "https://artifactory.aba-enterprise.com/artifactory"
+      dockerRepo: "docker-prod"
+      mavenRepo: "libs-release"
+      npmRepo: "npm-prod"
+    prisma:
+      consoleUrl: "https://prisma.aba-enterprise.internal"
+      collection: "prod"

@@ -1,0 +1,47 @@
+name: Validate CI policy
+
+# Guards the org-wide policy files. A malformed gate switch or default value
+# cannot merge to this repo, so it can never ship to application pipelines.
+
+on:
+  pull_request:
+    paths:
+      - "policy/**"
+      - ".github/workflows/policy-validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "policy/**"
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install check-jsonschema
+        run: pipx install check-jsonschema
+
+      - name: Validate pipeline-policy.yml
+        run: >-
+          check-jsonschema
+          --schemafile policy/schema/pipeline-policy.schema.json
+          policy/pipeline-policy.yml
+
+      - name: Validate pipeline-defaults.yml
+        run: >-
+          check-jsonschema
+          --schemafile policy/schema/pipeline-defaults.schema.json
+          policy/pipeline-defaults.yml
+
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint policy YAML
+        run: |
+          pipx install yamllint
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, comments: {min-spaces-from-content: 1}}}" policy/

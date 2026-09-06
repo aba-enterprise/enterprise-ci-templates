@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/pipeline-policy.schema.json",
+  "title": "PipelinePolicy",
+  "description": "Mandatory, app-immutable CI/CD gate policy. Consumed by the reusable pipeline workflows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "test", "codeQuality", "sast", "imageScan", "dependencyScan", "secretScan", "exceptions"],
+  "properties": {
+    "apiVersion": { "const": "pipeline.aba-enterprise/v1" },
+    "kind": { "const": "PipelinePolicy" },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "gate", "coverage"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "gate": { "$ref": "#/$defs/gate" },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enforce", "minPercent", "gate"],
+          "properties": {
+            "enforce": { "type": "boolean" },
+            "minPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "gate": { "$ref": "#/$defs/gate" }
+          }
+        }
+      }
+    },
+    "codeQuality": { "$ref": "#/$defs/toolGate" },
+    "sast": { "$ref": "#/$defs/toolGate" },
+    "imageScan": {
+      "allOf": [{ "$ref": "#/$defs/toolGate" }],
+      "properties": {
+        "appliesWhen": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "dockerfilePresent": { "type": "boolean" } }
+        }
+      }
+    },
+    "dependencyScan": { "$ref": "#/$defs/simpleGate" },
+    "secretScan": { "$ref": "#/$defs/simpleGate" },
+    "sast_codeql": { "$ref": "#/$defs/simpleGate" },
+    "exceptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mechanism", "approvedBy", "maxDurationDays", "audit"],
+      "properties": {
+        "mechanism": { "type": "string" },
+        "approvedBy": { "type": "string" },
+        "maxDurationDays": { "type": "integer", "minimum": 1, "maximum": 90 },
+        "audit": { "enum": ["required", "optional"] }
+      }
+    }
+  },
+  "$defs": {
+    "gate": { "enum": ["block", "warn"] },
+    "simpleGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "tool", "gate"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "tool": { "type": "string", "minLength": 1 },
+        "gate": { "$ref": "#/$defs/gate" },
+        "event": { "type": "string" }
+      }
+    },
+    "toolGate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["required", "tool", "gate", "reusableWorkflow"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "tool": { "type": "string", "minLength": 1 },
+        "gate": { "$ref": "#/$defs/gate" },
+        "reusableWorkflow": { "type": "string", "pattern": "^\\.github/workflows/.+\\.ya?ml$" },
+        "with": { "type": "object" }
+      }
+    }
+  }
+}

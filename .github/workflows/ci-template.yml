@@ -29,6 +29,13 @@ on:
           Point at a k8s/ARC Linux scale-set label, e.g. 'arc-linux'.
         type: string
         default: ubuntu-latest
+      environment:
+        description: >
+          Deploy target whose service endpoints to resolve from
+          policy/pipeline-defaults.yml (environments.<name>). CI runs against
+          non-prod tooling; production promotion passes 'prod'.
+        type: string
+        default: nonprod
 
 permissions:
   contents: read
@@ -64,7 +71,7 @@ jobs:
       sast_profile:      ${{ steps.parse.outputs.sast_profile }}
       image_repository:  ${{ steps.parse.outputs.image_repository }}
       codeql_lang:       ${{ steps.parse.outputs.codeql_lang }}
-      # gate decisions (from central org-policy.yml — NOT app-overridable)
+      # gate decisions (from central policy/pipeline-policy.yml — NOT app-overridable)
       gate_test:        ${{ steps.parse.outputs.gate_test }}
       gate_coverage:    ${{ steps.parse.outputs.gate_coverage }}
       coverage_min:     ${{ steps.parse.outputs.coverage_min }}
@@ -77,25 +84,43 @@ jobs:
       run_dependency:   ${{ steps.parse.outputs.run_dependency }}
       run_secret:       ${{ steps.parse.outputs.run_secret }}
       run_codeql:       ${{ steps.parse.outputs.run_codeql }}
+      # service endpoints (from central policy/pipeline-defaults.yml)
+      #   common.*  — one org-wide instance
+      environment:      ${{ steps.parse.outputs.environment }}
+      registry_host:    ${{ steps.parse.outputs.registry_host }}
+      registry_namespace: ${{ steps.parse.outputs.registry_namespace }}
+      sonarqube_url:     ${{ steps.parse.outputs.sonarqube_url }}
+      sonarqube_quality_gate: ${{ steps.parse.outputs.sonarqube_quality_gate }}
+      veracode_api_base: ${{ steps.parse.outputs.veracode_api_base }}
+      veracode_policy:  ${{ steps.parse.outputs.veracode_policy }}
+      #   environments.<environment>.*  — per deploy target
+      vault_addr:       ${{ steps.parse.outputs.vault_addr }}
+      vault_role:       ${{ steps.parse.outputs.vault_role }}
+      artifactory_url:  ${{ steps.parse.outputs.artifactory_url }}
+      artifactory_docker_repo: ${{ steps.parse.outputs.artifactory_docker_repo }}
+      artifactory_maven_repo:  ${{ steps.parse.outputs.artifactory_maven_repo }}
+      artifactory_npm_repo:    ${{ steps.parse.outputs.artifactory_npm_repo }}
+      prisma_console_url: ${{ steps.parse.outputs.prisma_console_url }}
+      prisma_collection: ${{ steps.parse.outputs.prisma_collection }}
     steps:
       - uses: actions/checkout@v4
 
-      # Central, app-immutable policy. Checked out from THIS templates repo so no
-      # app repo can change which gates run or lower a threshold.
       - name: Checkout org policy
         uses: actions/checkout@v4
         with:
           repository: aba-enterprise/enterprise-ci-templates
           ref: main
-          path: .org-policy-src
-          sparse-checkout: org-policy.yml
+          path: .policy-src
+          sparse-checkout: policy
           sparse-checkout-cone-mode: false
 
       - id: parse
         shell: bash
         env:
           CONFIG: ${{ inputs.config-path }}
-          POLICY: .org-policy-src/org-policy.yml
+          POLICY: .policy-src/policy/pipeline-policy.yml
+          COMMON: .policy-src/policy/pipeline-defaults.yml
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
 
@@ -106,14 +131,26 @@ jobs:
             echo "::error::CI config not found at '$CONFIG'"; exit 1
           fi
           if [ ! -f "$POLICY" ]; then
-            echo "::error::org-policy.yml not found — cannot run without central policy"; exit 1
+            echo "::error::pipeline-policy.yml not found — cannot run without central policy"; exit 1
+          fi
+          if [ ! -f "$COMMON" ]; then
+            echo "::error::pipeline-defaults.yml not found — cannot run without central defaults"; exit 1
           fi
 
           get()  { yq "$1 // \"\"" "$CONFIG"; }
           pol()  { yq "$1 // \"\"" "$POLICY"; }
+          # shared non-secret default; usage: com '.common.runner.os'
+          com()  { yq "$1 // \"\"" "$COMMON"; }
           # a gate is ON unless policy says gate == warn; 'required:false' disables the stage
           gate() { [ "$(pol "$1.gate")" = "warn" ] && echo "no" || echo "yes"; }
           reqd() { [ "$(pol "$1.required")" = "false" ] && echo "false" || echo "true"; }
+
+          # environment-scoped service endpoint; usage: envd '.vault.addr'
+          ENVIRONMENT="${ENVIRONMENT:-nonprod}"
+          if [ "$(com ".environments.${ENVIRONMENT}")" = "" ]; then
+            echo "::error::environment '${ENVIRONMENT}' not defined in pipeline-defaults.yml (expected nonprod|prod)"; exit 1
+          fi
+          envd() { yq ".environments.${ENVIRONMENT}$1 // \"\"" "$COMMON"; }
 
           LANGUAGE=$(get '.metadata.language')
           RUNNER_OS=$(yq '.ci.runner.os // "linux"' "$CONFIG")
@@ -172,7 +209,7 @@ jobs:
             echo "image_repository=${IMAGE_REPO}"
             echo "codeql_lang=${CODEQL}"
 
-            # --- gate decisions (central org-policy.yml, app-immutable) ---
+            # --- gate decisions (central policy/pipeline-policy.yml, app-immutable) ---
             echo "gate_test=$(gate '.test')"
             echo "gate_coverage=$(gate '.test.coverage')"
             echo "coverage_min=$(pol '.test.coverage.minPercent')"
@@ -185,9 +222,26 @@ jobs:
             echo "run_dependency=$(reqd '.dependencyScan')"
             echo "run_secret=$(reqd '.secretScan')"
             echo "run_codeql=$(reqd '.sast_codeql')"
+
+            # --- service endpoints (central policy/pipeline-defaults.yml) ---
+            echo "environment=${ENVIRONMENT}"
+            echo "registry_host=$(com '.common.registry.host')"
+            echo "registry_namespace=$(com '.common.registry.namespace')"
+            echo "sonarqube_url=$(com '.common.sonarqube.url')"
+            echo "sonarqube_quality_gate=$(com '.common.sonarqube.qualityGate')"
+            echo "veracode_api_base=$(com '.common.veracode.apiBase')"
+            echo "veracode_policy=$(com '.common.veracode.policy')"
+            echo "vault_addr=$(envd '.vault.addr')"
+            echo "vault_role=$(envd '.vault.role')"
+            echo "artifactory_url=$(envd '.artifactory.url')"
+            echo "artifactory_docker_repo=$(envd '.artifactory.dockerRepo')"
+            echo "artifactory_maven_repo=$(envd '.artifactory.mavenRepo')"
+            echo "artifactory_npm_repo=$(envd '.artifactory.npmRepo')"
+            echo "prisma_console_url=$(envd '.prisma.consoleUrl')"
+            echo "prisma_collection=$(envd '.prisma.collection')"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Parsed '${LANGUAGE}' | backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG") os=${RUNNER_OS}"
+          echo "Parsed '${LANGUAGE}' | env=${ENVIRONMENT} backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG") os=${RUNNER_OS}"
 
   # ---------------------------------------------------------------------------
   # 2) build_test  - restore / lint / build / test on the app's own runner.
