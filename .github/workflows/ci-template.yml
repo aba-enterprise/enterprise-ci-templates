@@ -47,7 +47,6 @@ jobs:
       runner_backend:  ${{ steps.parse.outputs.runner_backend }}
       runner_labels:   ${{ steps.parse.outputs.runner_labels }}
       runner_os:       ${{ steps.parse.outputs.runner_os }}
-      timeout:         ${{ steps.parse.outputs.timeout }}
       working_dir:     ${{ steps.parse.outputs.working_dir }}
       restore_cmd:     ${{ steps.parse.outputs.restore_cmd }}
       build_cmd:       ${{ steps.parse.outputs.build_cmd }}
@@ -110,7 +109,6 @@ jobs:
             echo "runner_backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG")"
             echo "runner_labels=$(yq '.ci.runner.labels // "self-hosted"' "$CONFIG")"
             echo "runner_os=${RUNNER_OS}"
-            echo "timeout=${TIMEOUT}"
             echo "working_dir=$(yq '.build.workingDirectory // "."' "$CONFIG")"
             echo "restore_cmd=${RESTORE}"
             echo "build_cmd=$(get '.build.buildCommand')"
@@ -136,7 +134,7 @@ jobs:
     #       && format('codebuild-{0}-{1}-{2}', needs.load-ci-config.outputs.runner_labels, github.run_id, github.run_attempt)
     #       || needs.load-ci-config.outputs.runner_labels }}
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(needs.load-ci-config.outputs.timeout) }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
