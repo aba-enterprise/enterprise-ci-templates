@@ -1,0 +1,246 @@
+# =============================================================================
+#  Reusable CI workflow  - ci-template.yml
+#  Location: <org>/ci-workflows/.github/workflows/ci-template.yml
+#
+#  Scope: CI ONLY (build, test, scan, publish artifact). Deployment lives in a
+#  SEPARATE per-app repository and is not handled here.
+#
+#  Runners: self-hosted AWS CodeBuild (backend: codebuild) or k8s/ARC
+#  (backend: k8s), Windows or Linux, with PRE-BAKED images. No toolchain setup
+#  is performed - every runtime/tool must already be on the image PATH.
+#
+#  Set centrally by this workflow (intentionally NOT settable by app teams):
+#    - install command : per-language (npm ci / dotnet restore / mvn ... / nuget restore)
+#    - job timeout     : 20 minutes (30 for Windows builds)
+# =============================================================================
+
+name: Reusable CI
+
+on:
+  workflow_call:
+    inputs:
+      config-path:
+        description: "Path to the per-repo CI values file."
+        type: string
+        default: CiConfig/config.yml
+      bootstrap-runner:
+        description: >
+          Runner label for the lightweight Linux helper jobs (config, security).
+          Point at a k8s/ARC Linux scale-set label, e.g. 'arc-linux'.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) config  - Parse CiConfig/config.yml into typed job outputs.
+  # ---------------------------------------------------------------------------
+  config:
+    runs-on: ${{ inputs.bootstrap-runner }}
+    timeout-minutes: 5
+    outputs:
+      name:            ${{ steps.parse.outputs.name }}
+      language:        ${{ steps.parse.outputs.language }}
+      type:            ${{ steps.parse.outputs.type }}
+      runner_backend:  ${{ steps.parse.outputs.runner_backend }}
+      runner_labels:   ${{ steps.parse.outputs.runner_labels }}
+      runner_os:       ${{ steps.parse.outputs.runner_os }}
+      timeout:         ${{ steps.parse.outputs.timeout }}
+      working_dir:     ${{ steps.parse.outputs.working_dir }}
+      install_cmd:     ${{ steps.parse.outputs.install_cmd }}
+      build_cmd:       ${{ steps.parse.outputs.build_cmd }}
+      test_cmd:        ${{ steps.parse.outputs.test_cmd }}
+      lint_cmd:        ${{ steps.parse.outputs.lint_cmd }}
+      artifact_path:   ${{ steps.parse.outputs.artifact_path }}
+      sec_dependency:  ${{ steps.parse.outputs.sec_dependency }}
+      sec_secret:      ${{ steps.parse.outputs.sec_secret }}
+      sec_sast:        ${{ steps.parse.outputs.sec_sast }}
+      codeql_lang:     ${{ steps.parse.outputs.codeql_lang }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: parse
+        shell: bash
+        env:
+          CONFIG: ${{ inputs.config-path }}
+        run: |
+          set -euo pipefail
+
+          command -v yq >/dev/null 2>&1 || {
+            echo "::error::'yq' not found on the bootstrap runner image. Add it to the image."; exit 1; }
+
+          if [ ! -f "$CONFIG" ]; then
+            echo "::error::CI config not found at '$CONFIG'"; exit 1
+          fi
+
+          get() { yq "$1 // \"\"" "$CONFIG"; }
+
+          LANGUAGE=$(get '.metadata.language')
+          RUNNER_OS=$(yq '.ci.runner.os // "linux"' "$CONFIG")
+
+          # Install command is owned by the workflow (per language), NOT by app
+          # teams it is intentionally not read from config. Java assumes Maven.
+          case "$LANGUAGE" in
+            node)             INSTALL="npm ci" ;;
+            dotnet)           INSTALL="dotnet restore" ;;
+            java)             INSTALL="mvn -B dependency:go-offline" ;;
+            python)           INSTALL="pip install -r requirements.txt" ;;
+            dotnet-framework) INSTALL="nuget restore" ;;
+            *)                INSTALL="" ;;
+          esac
+
+          # Job timeout is owned by the workflow, NOT by app teams. Windows builds
+          # (e.g. .NET Framework) get more time; everything else uses 20 minutes.
+          if [ "$RUNNER_OS" = "windows" ]; then TIMEOUT=30; else TIMEOUT=20; fi
+
+          case "$LANGUAGE" in
+            node)   CODEQL="javascript-typescript" ;;
+            dotnet) CODEQL="csharp" ;;
+            java)   CODEQL="java-kotlin" ;;
+            python) CODEQL="python" ;;
+            *)      CODEQL="" ;;
+          esac
+
+          {
+            echo "name=$(get '.metadata.name')"
+            echo "language=${LANGUAGE}"
+            echo "type=$(get '.metadata.type')"
+            echo "runner_backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG")"
+            echo "runner_labels=$(yq '.ci.runner.labels // "self-hosted"' "$CONFIG")"
+            echo "runner_os=${RUNNER_OS}"
+            echo "timeout=${TIMEOUT}"
+            echo "working_dir=$(yq '.build.workingDirectory // "."' "$CONFIG")"
+            echo "install_cmd=${INSTALL}"
+            echo "build_cmd=$(get '.build.buildCommand')"
+            echo "test_cmd=$(get '.test.command')"
+            echo "lint_cmd=$(get '.quality.lint')"
+            echo "artifact_path=$(get '.build.artifactPath')"
+            echo "sec_dependency=$(yq '.security.dependencyScan // false' "$CONFIG")"
+            echo "sec_secret=$(yq '.security.secretScan // false' "$CONFIG")"
+            echo "sec_sast=$(yq '.security.sast // false' "$CONFIG")"
+            echo "codeql_lang=${CODEQL}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Parsed '${LANGUAGE}' | backend=$(yq '.ci.runner.backend // "codebuild"' "$CONFIG") os=${RUNNER_OS}"
+
+  # ---------------------------------------------------------------------------
+  # 2) build_test  - install / lint / build / test on the app's own runner.
+  #    No toolchain setup: images are pre-baked; commands use PATH.
+  # ---------------------------------------------------------------------------
+  build_test:
+    needs: config
+    # runs-on: >-
+    #   ${{ needs.config.outputs.runner_backend == 'codebuild'
+    #       && format('codebuild-{0}-{1}-{2}', needs.config.outputs.runner_labels, github.run_id, github.run_attempt)
+    #       || needs.config.outputs.runner_labels }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.config.outputs.timeout) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ===================== LINUX stages (bash) =============================
+      # - name: Install (linux)
+      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.install_cmd != ''
+      #   working-directory: ${{ needs.config.outputs.working_dir }}
+      #   shell: bash
+      #   env: { CMD: "${{ needs.config.outputs.install_cmd }}" }
+      #   run: eval "$CMD"
+
+      # - name: Lint (linux)
+      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.lint_cmd != ''
+      #   working-directory: ${{ needs.config.outputs.working_dir }}
+      #   shell: bash
+      #   env: { CMD: "${{ needs.config.outputs.lint_cmd }}" }
+      #   run: eval "$CMD"
+
+      - name: Build (linux)
+        if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.build_cmd != ''
+        working-directory: ${{ needs.config.outputs.working_dir }}
+        shell: bash
+        env: { CMD: "${{ needs.config.outputs.build_cmd }}" }
+        run: eval "$CMD"
+
+      # - name: Test (linux)
+      #   if: needs.config.outputs.runner_os != 'windows' && needs.config.outputs.test_cmd != ''
+      #   working-directory: ${{ needs.config.outputs.working_dir }}
+      #   shell: bash
+      #   env: { CMD: "${{ needs.config.outputs.test_cmd }}" }
+      #   run: eval "$CMD"
+
+  #     # ===================== WINDOWS stages (powershell) =====================
+  #     - name: Install (windows)
+  #       if: needs.config.outputs.runner_os == 'windows' && needs.config.outputs.install_cmd != ''
+  #       working-directory: ${{ needs.config.outputs.working_dir }}
+  #       shell: powershell
+  #       env: { CMD: "${{ needs.config.outputs.install_cmd }}" }
+  #       run: Invoke-Expression $env:CMD
+
+  #     - name: Lint (windows)
+  #       if: needs.config.outputs.runner_os == 'windows' && needs.config.outputs.lint_cmd != ''
+  #       working-directory: ${{ needs.config.outputs.working_dir }}
+  #       shell: powershell
+  #       env: { CMD: "${{ needs.config.outputs.lint_cmd }}" }
+  #       run: Invoke-Expression $env:CMD
+
+  #     - name: Build (windows)
+  #       if: needs.config.outputs.runner_os == 'windows' && needs.config.outputs.build_cmd != ''
+  #       working-directory: ${{ needs.config.outputs.working_dir }}
+  #       shell: powershell
+  #       env: { CMD: "${{ needs.config.outputs.build_cmd }}" }
+  #       run: Invoke-Expression $env:CMD
+
+  #     - name: Test (windows)
+  #       if: needs.config.outputs.runner_os == 'windows' && needs.config.outputs.test_cmd != ''
+  #       working-directory: ${{ needs.config.outputs.working_dir }}
+  #       shell: powershell
+  #       env: { CMD: "${{ needs.config.outputs.test_cmd }}" }
+  #       run: Invoke-Expression $env:CMD
+
+  #     - name: Upload build artifact
+  #       if: needs.config.outputs.artifact_path != ''
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ${{ needs.config.outputs.name }}-build
+  #         path: ${{ needs.config.outputs.artifact_path }}
+  #         if-no-files-found: ignore
+  #         retention-days: 7
+
+  # # ---------------------------------------------------------------------------
+  # # 3) security  -  secret scan, dependency review, SAST (CodeQL). Linux.
+  # #    CodeQL relies on toolchains already present on the bootstrap image.
+  # # ---------------------------------------------------------------------------
+  # security:
+  #   needs: config
+  #   runs-on: ${{ inputs.bootstrap-runner }}
+  #   timeout-minutes: 15
+  #   permissions:
+  #     contents: read
+  #     security-events: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Secret scan (gitleaks)
+  #       if: needs.config.outputs.sec_secret == 'true'
+  #       uses: gitleaks/gitleaks-action@v2
+  #       env:
+  #         GITHUB_TOKEN: ${{ github.token }}
+
+  #     - name: Dependency review
+  #       if: needs.config.outputs.sec_dependency == 'true' && github.event_name == 'pull_request'
+  #       uses: actions/dependency-review-action@v4
+
+  #     - name: Initialize CodeQL
+  #       if: needs.config.outputs.sec_sast == 'true' && needs.config.outputs.codeql_lang != ''
+  #       uses: github/codeql-action/init@v3
+  #       with:
+  #         languages: ${{ needs.config.outputs.codeql_lang }}
+
+  #     - name: CodeQL autobuild
+  #       if: needs.config.outputs.sec_sast == 'true' && needs.config.outputs.codeql_lang != ''
+  #       uses: github/codeql-action/autobuild@v3
+
+  #     - name: CodeQL analyze
+  #       if: needs.config.outputs.sec_sast == 'true' && needs.config.outputs.codeql_lang != ''
+  #       uses: github/codeql-action/analyze@v3
