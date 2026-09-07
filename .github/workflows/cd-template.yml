@@ -73,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cfg
-        uses: aba-enterprise/enterprise-ci-templates/actions/preflight-deploy@v1
+        uses: aba-enterprise/enterprise-ci-templates/actions/preflight-deploy@feature-ciconfig
         with:
           config-path: ${{ inputs.config-path }}
           environment: ${{ inputs.environment }}
