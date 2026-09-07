@@ -5,8 +5,14 @@
   "description": "Per-app CI values file (ci-config/config.yml). Supplies identifiers and commands only — never a gate switch. Gates live in pipeline-policy.yml.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["metadata", "test"],
+  "required": ["apiVersion", "metadata", "test"],
   "properties": {
+    "apiVersion": {
+      "type": "string",
+      "pattern": "^ci/v[0-9]+$",
+      "description": "Config contract version, e.g. 'ci/v2'. Lets this schema evolve without breaking older repos."
+    },
+
     "metadata": {
       "type": "object",
       "additionalProperties": false,

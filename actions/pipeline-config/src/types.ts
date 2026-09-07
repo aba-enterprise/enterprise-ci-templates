@@ -5,6 +5,7 @@
 export type Gate = "block" | "warn";
 
 export interface AppConfig {
+  apiVersion?: string;
   metadata?: {
     name?: string;
     language?: string;

@@ -10,7 +10,7 @@ lower anything here.
 | `pipeline-policy.yml` | `PipelinePolicy` | Mandatory gate switches — which scans run, `block` vs `warn`, required tools, coverage floor, waiver rules. | **Yes** |
 | `pipeline-defaults.yml` | `PipelineDefaults` | Shared **non-secret** defaults. `common:` = identical everywhere (registry, runner, job limits, the single SonarQube + Veracode instances). `environments:` = per-target (`nonprod` / `prod`) endpoints for Vault, Artifactory, Prisma. | No |
 | `schema/pipeline-{policy,defaults}.schema.json` | — | JSON Schema for the two files above, enforced by the `Validate CI policy` workflow on every PR touching `policy/`. | — |
-| `schema/config.schema.json` | — | JSON Schema for the **per-app** `ci-config/config.yml`. Not an instance in this repo — the `pipeline-config` action validates each app's config against it at pipeline runtime. | — |
+| `schema/config.schema.json` | — | JSON Schema for the **per-app** `ci-config/config.yml`. Not an instance in this repo — the `pipeline-config` action validates each app's config against it at pipeline runtime. Requires `apiVersion` (`ci/vN`), `metadata` (`name` + `language`), and `test.command`; rejects unknown keys. | — |
 
 ## Rules
 
