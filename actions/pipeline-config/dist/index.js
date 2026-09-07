@@ -25758,8 +25758,6 @@ exports.validate = validate;
 const fs = __importStar(__nccwpck_require__(9896));
 const yaml_1 = __nccwpck_require__(6637);
 const _2020_1 = __importDefault(__nccwpck_require__(7812));
-// Schemas in policy/schema/ declare draft 2020-12.
-const ajv = new _2020_1.default({ allErrors: true, strict: false });
 /** Read and parse a YAML file. Throws with the path if it is missing. */
 function readYaml(file) {
     if (!fs.existsSync(file)) {
@@ -25773,6 +25771,10 @@ function readYaml(file) {
  */
 function validate(data, schemaFile, label) {
     const schema = JSON.parse(fs.readFileSync(schemaFile, "utf8"));
+    // Fresh instance per call: Ajv refuses to re-register a schema $id, and each
+    // document type is validated against its own schema exactly once anyway.
+    // Schemas in policy/schema/ declare draft 2020-12.
+    const ajv = new _2020_1.default({ allErrors: true, strict: false });
     const check = ajv.compile(schema);
     if (!check(data)) {
         const detail = (check.errors ?? [])
@@ -32060,7 +32062,7 @@ async function run() {
         core.info(`policy   : ${policyPath}`);
         core.info(`defaults : ${defaultsPath}`);
         core.info(`environment: ${environment}`);
-        const config = (0, load_1.readYaml)(configPath);
+        const config = (0, load_1.validate)((0, load_1.readYaml)(configPath), path.join(schemaDir, "config.schema.json"), "ci-config/config.yml");
         const policy = (0, load_1.validate)((0, load_1.readYaml)(policyPath), path.join(schemaDir, "pipeline-policy.schema.json"), "pipeline-policy.yml");
         const defaults = (0, load_1.validate)((0, load_1.readYaml)(defaultsPath), path.join(schemaDir, "pipeline-defaults.schema.json"), "pipeline-defaults.yml");
         const outputs = (0, resolve_1.resolve)({ config, policy, defaults, environment });

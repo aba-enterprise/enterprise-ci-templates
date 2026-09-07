@@ -2,9 +2,6 @@ import * as fs from "fs";
 import { parse as parseYaml } from "yaml";
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020";
 
-// Schemas in policy/schema/ declare draft 2020-12.
-const ajv = new Ajv2020({ allErrors: true, strict: false });
-
 /** Read and parse a YAML file. Throws with the path if it is missing. */
 export function readYaml<T>(file: string): T {
   if (!fs.existsSync(file)) {
@@ -23,6 +20,10 @@ export function validate<T>(
   label: string,
 ): T {
   const schema = JSON.parse(fs.readFileSync(schemaFile, "utf8"));
+  // Fresh instance per call: Ajv refuses to re-register a schema $id, and each
+  // document type is validated against its own schema exactly once anyway.
+  // Schemas in policy/schema/ declare draft 2020-12.
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
   const check: ValidateFunction = ajv.compile(schema);
   if (!check(data)) {
     const detail = (check.errors ?? [])

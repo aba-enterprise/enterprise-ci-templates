@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/config.schema.json",
+  "title": "AppConfig",
+  "description": "Per-app CI values file (ci-config/config.yml). Supplies identifiers and commands only — never a gate switch. Gates live in pipeline-policy.yml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "test"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "language"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "language": {
+          "enum": ["node", "dotnet", "dotnet-framework", "java", "python"]
+        },
+        "languageVersion": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["service", "library", "job"] }
+      }
+    },
+
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runner": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "backend": { "enum": ["codebuild", "k8s"] },
+            "labels": { "type": "string", "minLength": 1 },
+            "os": { "enum": ["linux", "windows"] }
+          }
+        }
+      }
+    },
+
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workingDirectory": { "type": "string", "minLength": 1 },
+        "buildCommand": { "type": "string", "minLength": 1 },
+        "artifactPath": { "type": "string", "minLength": 1 },
+        "projectPath": { "type": "string", "minLength": 1 },
+        "dockerfilePath": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "testProjectPath": { "type": "string", "minLength": 1 },
+        "coverageReport": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lint": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codeQuality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "projectKey": { "type": "string", "minLength": 1 },
+            "organizationKey": { "type": "string", "minLength": 1 }
+          }
+        },
+        "sast": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": { "type": "string", "minLength": 1 }
+          }
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

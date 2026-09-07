@@ -1,6 +1,0 @@
-node_modules/
-*/lib/
-*/coverage/
-coverage/
-*.log
-# */dist/ is committed on purpose — it is what each action's runs.main executes.

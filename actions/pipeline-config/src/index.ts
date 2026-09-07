@@ -30,7 +30,11 @@ async function run(): Promise<void> {
     core.info(`defaults : ${defaultsPath}`);
     core.info(`environment: ${environment}`);
 
-    const config = readYaml<AppConfig>(configPath);
+    const config = validate<AppConfig>(
+      readYaml(configPath),
+      path.join(schemaDir, "config.schema.json"),
+      "ci-config/config.yml",
+    );
     const policy = validate<PipelinePolicy>(
       readYaml(policyPath),
       path.join(schemaDir, "pipeline-policy.schema.json"),

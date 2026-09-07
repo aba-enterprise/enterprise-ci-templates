@@ -46,7 +46,8 @@ jobs:
   #    ci-config/config.yml with the central policy/ (pipeline-policy.yml +
   #    pipeline-defaults.yml), schema-validates them, and emits typed outputs.
   # ---------------------------------------------------------------------------
-  preflight:
+  Preflight:
+    name: Preflight (config, policy & defaults constants)
     runs-on: ${{ inputs.bootstrap-runner }}
     timeout-minutes: 5
     outputs:
@@ -120,11 +121,12 @@ jobs:
   #    No toolchain setup: images are pre-baked; commands use PATH.
   # ---------------------------------------------------------------------------
   Build_Test:
-    needs: preflight
+    name: Build & Test
+    needs: Preflight
     # runs-on: >-
-    #   ${{ needs.preflight.outputs.runner_backend == 'codebuild'
-    #       && format('codebuild-{0}-{1}-{2}', needs.preflight.outputs.runner_labels, github.run_id, github.run_attempt)
-    #       || needs.preflight.outputs.runner_labels }}
+    #   ${{ needs.Preflight.outputs.runner_backend == 'codebuild'
+    #       && format('codebuild-{0}-{1}-{2}', needs.Preflight.outputs.runner_labels, github.run_id, github.run_attempt)
+    #       || needs.Preflight.outputs.runner_labels }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -132,68 +134,68 @@ jobs:
 
       # ===================== LINUX stages (bash) =============================
       - name: Restore dependencies (linux)
-        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.restore_cmd != ''
-        working-directory: ${{ needs.preflight.outputs.working_dir }}
+        if: needs.Preflight.outputs.runner_os != 'windows' && needs.Preflight.outputs.restore_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.preflight.outputs.restore_cmd }}" }
+        env: { CMD: "${{ needs.Preflight.outputs.restore_cmd }}" }
         run: eval "$CMD"
 
       - name: Lint (linux)
-        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.lint_cmd != ''
-        working-directory: ${{ needs.preflight.outputs.working_dir }}
+        if: needs.Preflight.outputs.runner_os != 'windows' && needs.Preflight.outputs.lint_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.preflight.outputs.lint_cmd }}" }
+        env: { CMD: "${{ needs.Preflight.outputs.lint_cmd }}" }
         run: eval "$CMD"
 
       - name: Build (linux)
-        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.build_cmd != ''
-        working-directory: ${{ needs.preflight.outputs.working_dir }}
+        if: needs.Preflight.outputs.runner_os != 'windows' && needs.Preflight.outputs.build_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.preflight.outputs.build_cmd }}" }
+        env: { CMD: "${{ needs.Preflight.outputs.build_cmd }}" }
         run: eval "$CMD"
 
       - name: Test (linux)
-        if: needs.preflight.outputs.runner_os != 'windows' && needs.preflight.outputs.test_cmd != ''
-        working-directory: ${{ needs.preflight.outputs.working_dir }}
+        if: needs.Preflight.outputs.runner_os != 'windows' && needs.Preflight.outputs.test_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
         shell: bash
-        env: { CMD: "${{ needs.preflight.outputs.test_cmd }}" }
+        env: { CMD: "${{ needs.Preflight.outputs.test_cmd }}" }
         run: eval "$CMD"
 
   #     # ===================== WINDOWS stages (powershell) =====================
   #     - name: Restore dependencies (windows)
-  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.restore_cmd != ''
-  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
+  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.restore_cmd != ''
+  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.preflight.outputs.restore_cmd }}" }
+  #       env: { CMD: "${{ needs.Preflight.outputs.restore_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Lint (windows)
-  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.lint_cmd != ''
-  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
+  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.lint_cmd != ''
+  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.preflight.outputs.lint_cmd }}" }
+  #       env: { CMD: "${{ needs.Preflight.outputs.lint_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Build (windows)
-  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.build_cmd != ''
-  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
+  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.build_cmd != ''
+  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.preflight.outputs.build_cmd }}" }
+  #       env: { CMD: "${{ needs.Preflight.outputs.build_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Test (windows)
-  #       if: needs.preflight.outputs.runner_os == 'windows' && needs.preflight.outputs.test_cmd != ''
-  #       working-directory: ${{ needs.preflight.outputs.working_dir }}
+  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.test_cmd != ''
+  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
   #       shell: powershell
-  #       env: { CMD: "${{ needs.preflight.outputs.test_cmd }}" }
+  #       env: { CMD: "${{ needs.Preflight.outputs.test_cmd }}" }
   #       run: Invoke-Expression $env:CMD
 
   #     - name: Upload build artifact
-  #       if: needs.preflight.outputs.artifact_path != ''
+  #       if: needs.Preflight.outputs.artifact_path != ''
   #       uses: actions/upload-artifact@v4
   #       with:
-  #         name: ${{ needs.preflight.outputs.name }}-build
-  #         path: ${{ needs.preflight.outputs.artifact_path }}
+  #         name: ${{ needs.Preflight.outputs.name }}-build
+  #         path: ${{ needs.Preflight.outputs.artifact_path }}
   #         if-no-files-found: ignore
   #         retention-days: 7
 
@@ -212,25 +214,25 @@ jobs:
   #     - uses: actions/checkout@v4
 
   #     - name: Secret scan (gitleaks)
-  #       if: needs.preflight.outputs.sec_secret == 'true'
+  #       if: needs.Preflight.outputs.sec_secret == 'true'
   #       uses: gitleaks/gitleaks-action@v2
   #       env:
   #         GITHUB_TOKEN: ${{ github.token }}
 
   #     - name: Dependency review
-  #       if: needs.preflight.outputs.sec_dependency == 'true' && github.event_name == 'pull_request'
+  #       if: needs.Preflight.outputs.sec_dependency == 'true' && github.event_name == 'pull_request'
   #       uses: actions/dependency-review-action@v4
 
   #     - name: Initialize CodeQL
-  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
+  #       if: needs.Preflight.outputs.sec_sast == 'true' && needs.Preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/init@v3
   #       with:
-  #         languages: ${{ needs.preflight.outputs.codeql_lang }}
+  #         languages: ${{ needs.Preflight.outputs.codeql_lang }}
 
   #     - name: CodeQL autobuild
-  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
+  #       if: needs.Preflight.outputs.sec_sast == 'true' && needs.Preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/autobuild@v3
 
   #     - name: CodeQL analyze
-  #       if: needs.preflight.outputs.sec_sast == 'true' && needs.preflight.outputs.codeql_lang != ''
+  #       if: needs.Preflight.outputs.sec_sast == 'true' && needs.Preflight.outputs.codeql_lang != ''
   #       uses: github/codeql-action/analyze@v3
