@@ -187,29 +187,30 @@ max 30 days — see `pipeline-policy.yml` `exceptions`).
 
 ### Dependencies / supply chain
 
-The `pipeline-config` action has just two runtime dependencies, both pinned in
-[`actions/package-lock.json`](../actions/package-lock.json) and **bundled by
-`@vercel/ncc` into the committed `dist/index.js`** — CI runs that fixed, reviewed
-blob, never a fresh `npm install`.
+The `pipeline-config` action has two npm runtime dependencies, pinned +
+integrity-hashed in [`package-lock.json`](../actions/package-lock.json) and
+`@vercel/ncc`-bundled into the committed `dist/index.js` — a pipeline run
+executes that fixed, reviewed blob, never a fresh `npm install`.
 
-| Package | Version | License | Publisher / provenance | Role |
-|---------|---------|---------|------------------------|------|
-| `ajv` | `8.20.0` (`^8.17.1`) | MIT | [OpenJS Foundation](https://openjsf.org) project (maint. Evgeny Poberezkin); one of the most-depended-on packages on npm | JSON Schema (draft 2020-12) validation of the app config **and** the policy files |
-| `js-yaml` | `4.3.2` (`^4.1.0`) | MIT | [`nodeca`](https://github.com/nodeca) org — multiple maintainers; the YAML parser bundled by ESLint and webpack | Parse `config.yml` / policy / defaults |
+| Package | Version | License | Role |
+|---------|---------|---------|------|
+| `ajv` | `8.20.0` (`^8.17.1`) | MIT | JSON Schema (draft 2020-12) validation of the app config **and** the policy files |
+| `js-yaml` | `4.3.2` (`^4.1.0`) | MIT | Parse `config.yml` / policy / defaults |
 
-Ajv's transitive deps (`fast-deep-equal`, `json-schema-traverse`,
-`require-from-string`, `uri-js`) are all MIT/BSD and vendored into the same
-bundle. `js-yaml`'s only dependency is `argparse@2` (Python-2.0 licence,
-`nodeca`, used by its CLI — not the parse path `readYaml` calls). `js-yaml`
-follows YAML 1.1, so unquoted
-`yes/no/on/off` parse as booleans; the schemas pin every scalar to a
-string/enum, so a mistyped value fails validation rather than resolving to the
-wrong type.
+Both are acquired only through the org's curated Artifactory npm virtual repo
+(no direct npmjs access); the Artifactory Curation / Xray policy — CVE, licence,
+and package-age gates — is the "approved dependency" control, and it keeps
+re-evaluating cached packages as new advisories land. `ajv`'s transitive deps
+(`fast-deep-equal`, `json-schema-traverse`, `require-from-string`, `uri-js`) and
+`js-yaml`'s one dep (`argparse@2`, CLI-only) are all MIT/BSD and pass the same
+gate. `js-yaml` follows YAML 1.1, so unquoted `yes/no/on/off` parse as booleans —
+the schemas pin every scalar to a string/enum, so a mistyped value fails
+validation rather than resolving to the wrong type.
 
 Everything else in `actions/` is **dev-only** (`typescript`, `eslint`, `jest`,
 `ncc`, `@types/*`) — used to lint, test and build, never shipped in `dist/` and
 never executed by a pipeline run. `actions-ci.yml` fails the build if a
-committed `dist/` no longer matches its source, so a dependency change cannot
+committed `dist/` no longer matches its source, so a dependency bump cannot
 reach app pipelines without a reviewed diff of the bundle.
 
 ---
