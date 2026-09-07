@@ -26,7 +26,7 @@ The AWS resources and the GitHub-OIDC deploy role are created out of band
 | Document | Owned by | Lives in | Supplies |
 |----------|----------|----------|----------|
 | `deploy/<env>.yml` | App team | `<app>-config` | `service.target`, `release.version`/`strategy`, runtime + scaling knobs, `infra:` resource names. Never secret values. |
-| `deploy-defaults.yml` | Platform / SRE | this repo | AWS account + region per env, OIDC role pattern, default strategy + soak. |
+| `deploy-defaults.yml` | Platform / SRE | this repo | Central runner account + default region per env, OIDC role pattern, default strategy + soak. The app's deploy-target account is in `deploy/<env>.yml` `infra.account`. |
 
 ## 3. How an app calls CD
 

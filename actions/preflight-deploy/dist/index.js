@@ -36310,10 +36310,17 @@ function resolve({ config, defaults, versionOverride }) {
     if (!version && envName !== "dev") {
         throw new Error(`release.version is required for environment '${envName}' — only 'dev' may deploy the latest artifact`);
     }
-    const region = config.environment?.region || env.region;
+    const region = config.environment?.region || config.infra?.region || env.region;
     const strategy = config.release?.strategy || env.strategyDefault;
+    // The deploy-target account lives in the app's deploy/<env>.yml (infra.account),
+    // one set of accounts per app. env.runnerAccount is the central CI account and
+    // is NOT what the OIDC deploy role is scoped to.
+    const deployAccount = config.infra?.account ?? "";
+    if (!deployAccount) {
+        throw new Error(`infra.account is required in deploy/${envName}.yml — it is the AWS account this deploy targets`);
+    }
     const deployRole = fill(defaults.common.deployRolePattern, {
-        account: env.account,
+        account: deployAccount,
         service,
         env: envName,
     });
@@ -36328,7 +36335,8 @@ function resolve({ config, defaults, versionOverride }) {
         target,
         environment: envName,
         region,
-        account_id: env.account,
+        account_id: deployAccount,
+        runner_account: env.runnerAccount,
         deploy_role: deployRole,
         session_name: defaults.common.sessionName,
         // release

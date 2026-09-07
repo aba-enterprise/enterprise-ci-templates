@@ -33,8 +33,9 @@ outputs:
   target:         { description: "service.target — ecs | ec2 | lambda | s3" }
   environment:    { description: "resolved environment name" }
   region:         { description: "environment.region or deploy-defaults region" }
-  account_id:     { description: "AWS account id for the environment" }
-  deploy_role:    { description: "GitHub-OIDC role ARN to assume" }
+  account_id:     { description: "AWS account the deploy targets (deploy/<env>.yml infra.account)" }
+  runner_account: { description: "central account hosting the CI runners (deploy-defaults runnerAccount)" }
+  deploy_role:    { description: "GitHub-OIDC role ARN to assume, in account_id" }
   session_name:   { description: "configure-aws-credentials session name" }
   # --- release ---
   version:          { description: "artifact ref being deployed ('' = latest, dev only)" }

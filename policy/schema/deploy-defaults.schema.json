@@ -14,7 +14,7 @@
       "additionalProperties": false,
       "required": ["deployRolePattern", "sessionName"],
       "properties": {
-        "deployRolePattern": { "type": "string", "minLength": 1, "description": "GitHub-OIDC deploy role ARN, created per env alongside the app's AWS resources. {account}, {service}, {env} substituted." },
+        "deployRolePattern": { "type": "string", "minLength": 1, "description": "GitHub-OIDC deploy role ARN in the app's account. {account} is substituted from the app's deploy/<env>.yml infra.account (not runnerAccount); {service}, {env} also substituted." },
         "sessionName": { "type": "string", "minLength": 1 }
       }
     },
@@ -26,10 +26,10 @@
         "^(dev|uat|prod)$": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["account", "region", "requireApproval", "strategyDefault"],
+          "required": ["runnerAccount", "region", "requireApproval", "strategyDefault"],
           "properties": {
-            "account": { "type": "string", "pattern": "^[0-9]{12}$", "description": "AWS account id — one account per environment." },
-            "region": { "type": "string", "minLength": 1 },
+            "runnerAccount": { "type": "string", "pattern": "^[0-9]{12}$", "description": "Central account (owned by central DevOps) that hosts the CI runners for this environment. Same for every app. The app's own deploy-target account is deploy/<env>.yml infra.account." },
+            "region": { "type": "string", "minLength": 1, "description": "Default AWS region; an app may override via deploy/<env>.yml infra.region." },
             "requireApproval": { "type": "boolean", "description": "Informational mirror of the GitHub Environment protection rule." },
             "strategyDefault": { "enum": ["rolling", "blue-green", "canary"] },
             "bakeMinutes": { "type": "integer", "minimum": 0, "description": "Post-deploy soak before the job reports success (blue-green / canary)." }

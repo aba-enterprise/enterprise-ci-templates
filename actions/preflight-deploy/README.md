@@ -32,7 +32,7 @@ used by the config repo's PR check.
 
 | Group | Outputs |
 |-------|---------|
-| routing | `service_name`, `target`, `environment`, `region`, `account_id`, `deploy_role`, `session_name` |
+| routing | `service_name`, `target`, `environment`, `region`, `account_id` (deploy target, from `infra.account`), `runner_account` (central CI account), `deploy_role`, `session_name` |
 | release | `version` (`''` = latest, dev only), `strategy`, `require_approval`, `bake_minutes` |
 | runtime | `desired_count`, `cpu`, `memory`, `container_port`, `timeout_seconds`, `runtime_env_json`, `secret_names` |
 | scaling / health | `scale_min`, `scale_max`, `scale_target_cpu`, `health_path`, `health_grace_seconds` |
@@ -41,6 +41,7 @@ used by the config repo's PR check.
 Rules enforced by the resolver (beyond the schema):
 
 - `environment` must exist in `deploy-defaults.yml`.
+- `infra.account` is required — it is the account the deploy targets and what `{account}` in `deployRolePattern` resolves to (not the central `runnerAccount`).
 - `release.version` is required unless `environment: dev`.
 - `strategy` / `bakeMinutes` fall back to the env's defaults when the file omits them.
 - the file's `environment.name` must match the `environment` input.

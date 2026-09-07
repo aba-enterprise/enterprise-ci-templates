@@ -22,12 +22,18 @@ export interface DeployConfig {
   scaling?: { min?: number; max?: number; targetCpu?: number };
   healthcheck?: { path?: string; gracePeriodSeconds?: number };
   s3?: { sourceDir?: string; cacheControl?: string; invalidatePaths?: string[] };
-  // AWS resource coordinates — read directly by cd-template.yml, not the resolver.
-  infra?: Record<string, unknown>;
+  // AWS resource coordinates — mostly read directly by cd-template.yml. The
+  // resolver only reads account (deploy-target) and the optional region override.
+  infra?: {
+    account?: string;
+    region?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface DeployEnvBlock {
-  account: string;
+  /** Central account hosting the CI runners — not the app's deploy target. */
+  runnerAccount: string;
   region: string;
   requireApproval: boolean;
   strategyDefault: Strategy;

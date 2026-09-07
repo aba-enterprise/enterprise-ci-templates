@@ -9,8 +9,8 @@ const defaults: DeployDefaults = {
     sessionName: "gha-deploy",
   },
   environments: {
-    dev: { account: "111111111111", region: "us-east-1", requireApproval: false, strategyDefault: "rolling" },
-    prod: { account: "333333333333", region: "us-east-1", requireApproval: true, strategyDefault: "blue-green", bakeMinutes: 10 },
+    dev: { runnerAccount: "999999999999", region: "us-east-1", requireApproval: false, strategyDefault: "rolling" },
+    prod: { runnerAccount: "999999999999", region: "us-east-1", requireApproval: true, strategyDefault: "blue-green", bakeMinutes: 10 },
   },
 };
 
@@ -18,17 +18,24 @@ const base: DeployConfig = {
   apiVersion: "cd/v1",
   service: { name: "dotnet-sample-app", target: "ecs" },
   environment: { name: "dev" },
+  infra: { account: "111111111111" },
   release: { strategy: "rolling" },
   runtime: { desiredCount: 2, env: { ASPNETCORE_ENVIRONMENT: "Development" }, secrets: ["Db__Conn"] },
 };
 
 describe("resolve", () => {
-  it("fills the OIDC role from the env block", () => {
+  it("fills the OIDC role from the app's infra.account, not the runner account", () => {
     const out = resolve({ config: base, defaults });
     expect(out.deploy_role).toBe("arn:aws:iam::111111111111:role/gha-deploy-dotnet-sample-app");
     expect(out.account_id).toBe("111111111111");
+    expect(out.runner_account).toBe("999999999999");
     expect(out.runtime_env_json).toBe('{"ASPNETCORE_ENVIRONMENT":"Development"}');
     expect(out.secret_names).toBe("Db__Conn");
+  });
+
+  it("requires infra.account", () => {
+    const bad: DeployConfig = { ...base, infra: {} };
+    expect(() => resolve({ config: bad, defaults })).toThrow(/infra.account is required/);
   });
 
   it("allows an empty version only for dev", () => {

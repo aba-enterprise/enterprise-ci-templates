@@ -46,7 +46,9 @@
       "type": "object",
       "additionalProperties": false,
       "description": "AWS resource coordinates the deploy runs against. Filled in per environment when the resources are created; read directly by cd-template.yml from this file. Only the sub-block matching service.target is required.",
+      "required": ["account"],
       "properties": {
+        "account": { "type": "string", "pattern": "^[0-9]{12}$", "description": "AWS account id for this environment. One set of accounts per app (not org-wide), so it lives here rather than in deploy-defaults.yml. Substituted into deployRolePattern as {account}." },
         "region": { "type": "string", "minLength": 1, "description": "Optional override of environment.region / deploy-defaults region for the AWS calls in this deploy." },
         "ecs": {
           "type": "object",

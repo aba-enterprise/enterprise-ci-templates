@@ -4,9 +4,10 @@
 #  Owned by:  Platform / SRE.
 #
 #  Purpose: single source of truth for values that are identical across all app
-#  deployments (OIDC role naming) and per-environment settings (AWS account,
-#  region, default strategy, soak). Per-app AWS resource names do NOT belong
-#  here — they live in each app's <app>-config/deploy/<env>.yml (infra: block).
+#  deployments (OIDC role naming) and per-environment settings (the central
+#  runner account, default region, default strategy, soak). The app's own
+#  deploy-target AWS account and every per-app resource name live in each app's
+#  <app>-config/deploy/<env>.yml (infra: block), NOT here.
 #
 #  Consumed by:  actions/preflight-deploy  (bundled copy, two dirs up).
 #  Validated against policy/schema/deploy-defaults.schema.json in this repo's CI.
@@ -16,27 +17,29 @@ apiVersion: pipeline.aba-enterprise/v1
 kind: DeployDefaults
 
 common:
-  # GitHub-OIDC deploy role, created per environment alongside the app's AWS
-  # resources. Trust is scoped to  repo:<org>/<app>-config:environment:<env>.
+  # GitHub-OIDC deploy role, created per environment in the APP's account
+  # alongside the app's AWS resources. {account} is substituted from the app's
+  # deploy/<env>.yml infra.account — NOT runnerAccount below. Trust is scoped to
+  # repo:<org>/<app>-config:environment:<env>.
   deployRolePattern: "arn:aws:iam::{account}:role/gha-deploy-{service}"
 
   sessionName: "gha-deploy"
 
 environments:
   dev:
-    account: "111111111111"
+    runnerAccount: "111111111111"   # central account hosting the CI runners (owned by central DevOps)
     region: us-east-1
     requireApproval: false
     strategyDefault: rolling
 
   uat:
-    account: "222222222222"
+    runnerAccount: "222222222222"
     region: us-east-1
     requireApproval: true
     strategyDefault: rolling
 
   prod:
-    account: "333333333333"
+    runnerAccount: "333333333333"
     region: us-east-1
     requireApproval: true
     strategyDefault: blue-green
