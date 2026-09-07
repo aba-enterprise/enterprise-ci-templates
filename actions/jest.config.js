@@ -4,7 +4,6 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   clearMocks: true,
-  roots: ["<rootDir>/shared", "<rootDir>/preflight-config"],
-  testMatch: ["**/src/**/*.test.ts"],
+  testMatch: ["<rootDir>/*/src/**/*.test.ts"],
   collectCoverageFrom: ["*/src/**/*.ts", "!*/src/index.ts"],
 };

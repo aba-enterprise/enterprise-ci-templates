@@ -11,7 +11,7 @@
     "lint": "eslint \"*/src/**/*.ts\"",
     "test": "jest",
     "typecheck": "tsc -p tsconfig.json",
-    "build": "npm run build -w shared && npm run build -w preflight-config",
+    "build": "npm run build --workspaces --if-present",
     "all": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {

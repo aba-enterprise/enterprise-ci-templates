@@ -7,12 +7,12 @@ and hoisted; each action carries only its own runtime deps, its `action.yml`,
 
 ```
 actions/
-├── package.json            # workspaces + the build chain (one -w per action)
+├── package.json            # workspace list + build chain (--workspaces)
 ├── package-lock.json       # single lockfile
 ├── tsconfig.base.json      # every action's tsconfig extends this
-├── tsconfig.json           # typecheck project — lists every action's src/
+├── tsconfig.json           # typecheck project — globs every action's src/
 ├── .eslintrc.json          # cascades to all workspaces
-├── jest.config.js          # roots[] — lists every workspace with tests
+├── jest.config.js          # testMatch glob — every workspace's src/*.test.ts
 ├── shared/                 # @pipeline/shared — YAML load + JSON Schema validation
 └── preflight-config/        # action: resolve per-app config against central policy
     ├── action.yml          # runs: using node24, main dist/index.js
@@ -108,14 +108,16 @@ runs:
 }
 ```
 
-### 2. Register it in the four root config files
+### 2. Register it in the workspace list
 
 | File | Edit |
 |------|------|
 | `actions/package.json` | add `"my-action"` to `workspaces` |
-| `actions/package.json` | add `&& npm run build -w my-action` to the `build` script |
-| `actions/tsconfig.json` | add `"my-action/src"` to `include` |
-| `actions/jest.config.js` | add `"<rootDir>/my-action"` to `roots` |
+
+That's it. The `build` script (`npm run build --workspaces --if-present`),
+`tsconfig.json` (`include: ["*/src"]`) and `jest.config.js`
+(`testMatch: ["<rootDir>/*/src/**/*.test.ts"]`) all discover the new workspace
+automatically.
 
 (If the action imports `@pipeline/shared`, also add it under `paths` in
 `actions/tsconfig.json` only if you need editor resolution — the build resolves
