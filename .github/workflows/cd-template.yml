@@ -7,13 +7,14 @@
 #
 #  Split of concerns:
 #    <app>          (CI)     - builds + publishes the artifact (image digest / zip / bundle)
-#    <app>-infra    (IaC)    - creates every AWS resource + the OIDC deploy role,
-#                              and publishes coordinates to SSM  /<service>/<env>/...
-#    <app>-config   (values) - deploy/<env>.yml : what version, which knobs
-#    THIS workflow  (logic)  - assume role, resolve SSM coords, deploy, soak
+#    <app>-config   (values) - deploy/<env>.yml : what version, which knobs, AND the
+#                              AWS resource coordinates (infra: block) + the OIDC role
+#    THIS workflow  (logic)  - assume role, read coords from deploy/<env>.yml, deploy, soak
 #
 #  Auth: GitHub OIDC only. No long-lived AWS keys, no repo secrets.
 #  Promotion: build once in CI, pass the SAME `version` through dev -> uat -> prod.
+#             The resolved version is committed back into deploy/<env>.yml on a
+#             successful deploy, so it is the single source of truth for promotion.
 # =============================================================================
 
 name: Reusable CD
@@ -36,7 +37,7 @@ on:
 
 permissions:
   id-token: write      # required for OIDC role assumption
-  contents: read
+  contents: write      # commit the resolved version back into deploy/<env>.yml
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -54,7 +55,6 @@ jobs:
       region:         ${{ steps.cfg.outputs.region }}
       deploy_role:    ${{ steps.cfg.outputs.deploy_role }}
       session_name:   ${{ steps.cfg.outputs.session_name }}
-      ssm_prefix:     ${{ steps.cfg.outputs.ssm_prefix }}
       version:        ${{ steps.cfg.outputs.version }}
       strategy:       ${{ steps.cfg.outputs.strategy }}
       bake_minutes:   ${{ steps.cfg.outputs.bake_minutes }}
@@ -80,8 +80,8 @@ jobs:
           version:     ${{ inputs.version }}
 
   # ---------------------------------------------------------------------------
-  # 2) deploy - assume the env's OIDC role, resolve infra coordinates from SSM,
-  #    run the target-specific deploy, then soak.
+  # 2) deploy - assume the env's OIDC role, read infra coordinates from
+  #    deploy/<env>.yml (infra: block), run the target-specific deploy, then soak.
   #
   #    `environment:` binds the GitHub Environment so its protection rules
   #    (required reviewers for uat/prod, wait timer, branch restriction) gate
@@ -99,7 +99,7 @@ jobs:
     env:
       SERVICE: ${{ needs.Preflight_Deploy.outputs.service_name }}
       VERSION: ${{ needs.Preflight_Deploy.outputs.version }}
-      SSM_PREFIX: ${{ needs.Preflight_Deploy.outputs.ssm_prefix }}
+      DEPLOY_CFG: ${{ inputs.config-path }}/${{ inputs.environment }}.yml
     steps:
       - uses: actions/checkout@v4
 
@@ -110,25 +110,27 @@ jobs:
           role-session-name: ${{ needs.Preflight_Deploy.outputs.session_name }}
           aws-region:        ${{ needs.Preflight_Deploy.outputs.region }}
 
-      - name: Resolve infra coordinates from SSM
+      - name: Resolve infra coordinates from deploy config
         id: coord
         shell: bash
         run: |
           set -euo pipefail
-          get() { aws ssm get-parameter --name "$SSM_PREFIX/$1" \
-                    --query Parameter.Value --output text 2>/dev/null || true; }
+          test -f "$DEPLOY_CFG" || { echo "::error::deploy config not found: $DEPLOY_CFG"; exit 1; }
+          # yq is preinstalled on ubuntu-latest. '// ""' -> empty string when the
+          # key is absent (e.g. no codedeploy/lambda/s3 block for this target).
+          get() { yq -r "$1 // \"\"" "$DEPLOY_CFG"; }
           {
-            echo "ecs_cluster=$(get ecs/cluster)"
-            echo "ecs_service=$(get ecs/service)"
-            echo "ecs_container=$(get ecs/container-name)"
-            echo "ecr_repo=$(get ecr/repository)"
-            echo "codedeploy_app=$(get codedeploy/application)"
-            echo "codedeploy_group=$(get codedeploy/deployment-group)"
-            echo "lambda_function=$(get lambda/function-name)"
-            echo "lambda_alias=$(get lambda/alias)"
-            echo "artifact_bucket=$(get artifact/bucket)"
-            echo "s3_bucket=$(get s3/bucket)"
-            echo "s3_distribution=$(get s3/distribution-id)"
+            echo "ecs_cluster=$(get .infra.ecs.cluster)"
+            echo "ecs_service=$(get .infra.ecs.service)"
+            echo "ecs_container=$(get .infra.ecs.containerName)"
+            echo "ecr_repo=$(get .infra.ecr.repository)"
+            echo "codedeploy_app=$(get .infra.codedeploy.application)"
+            echo "codedeploy_group=$(get .infra.codedeploy.deploymentGroup)"
+            echo "lambda_function=$(get .infra.lambda.functionName)"
+            echo "lambda_alias=$(get .infra.lambda.alias)"
+            echo "artifact_bucket=$(get .infra.artifact.bucket)"
+            echo "s3_bucket=$(get .infra.s3.bucket)"
+            echo "s3_distribution=$(get .infra.s3.distributionId)"
           } >> "$GITHUB_OUTPUT"
 
       # =====================================================================
@@ -165,7 +167,7 @@ jobs:
 
           if [ "$STRATEGY" = "blue-green" ]; then
             # CodeDeploy consumes the task def via an appspec; deployment group
-            # is pre-created by <app>-infra.
+            # deployment group is pre-created out of band (see infra: coords).
             printf 'version: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: "%s"\n        LoadBalancerInfo:\n          ContainerName: "%s"\n          ContainerPort: %s\n' \
               "$NEW_TD" "$CONTAINER" "${{ needs.Preflight_Deploy.outputs.container_port }}" > appspec.yaml
             aws deploy create-deployment \
@@ -255,8 +257,20 @@ jobs:
         if: needs.Preflight_Deploy.outputs.version != ''
         shell: bash
         run: |
-          aws ssm put-parameter --name "$SSM_PREFIX/release/version" \
-            --type String --overwrite --value "$VERSION"
+          set -euo pipefail
+          # Persist the exact ref just deployed back into deploy/<env>.yml so it
+          # is the source of truth for promotion.
+          current=$(yq -r '.release.version // ""' "$DEPLOY_CFG")
+          if [ "$current" = "$VERSION" ]; then
+            echo "deploy/$DEPLOY_CFG already at $VERSION — nothing to commit"
+            exit 0
+          fi
+          yq -i '.release.version = strenv(VERSION)' "$DEPLOY_CFG"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEPLOY_CFG"
+          git commit -m "chore(deploy): ${SERVICE} ${{ inputs.environment }} -> ${VERSION} [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Summary
         if: always()

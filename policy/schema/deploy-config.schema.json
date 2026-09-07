@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/deploy-config.schema.json",
   "title": "DeployConfig",
-  "description": "Per-app, per-environment release values (deploy/<env>.yml). Carries WHAT to run and with which knobs — never resource definitions (those live in <app>-infra) and never deploy logic (that lives in cd-template.yml).",
+  "description": "Per-app, per-environment deploy values (deploy/<env>.yml). Carries WHAT to run, with which knobs, and the AWS resource coordinates to run it against — never deploy logic (that lives in cd-template.yml) and never secret values.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "service", "environment", "release"],
+  "required": ["apiVersion", "service", "environment", "release", "infra"],
   "properties": {
     "apiVersion": {
       "const": "cd/v1",
@@ -17,7 +17,7 @@
       "additionalProperties": false,
       "required": ["name", "target"],
       "properties": {
-        "name": { "type": "string", "minLength": 1, "description": "App identifier; must match the CI artifact name and the <app>-infra SSM prefix." },
+        "name": { "type": "string", "minLength": 1, "description": "App identifier; must match the CI artifact name." },
         "target": { "enum": ["ecs", "ec2", "lambda", "s3"], "description": "Deploy target — selects the branch of cd-template.yml that runs." }
       }
     },
@@ -42,6 +42,70 @@
       }
     },
 
+    "infra": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "AWS resource coordinates the deploy runs against. Filled in per environment when the resources are created; read directly by cd-template.yml from this file. Only the sub-block matching service.target is required.",
+      "properties": {
+        "region": { "type": "string", "minLength": 1, "description": "Optional override of environment.region / deploy-defaults region for the AWS calls in this deploy." },
+        "ecs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cluster", "service", "containerName"],
+          "properties": {
+            "cluster": { "type": "string", "minLength": 1, "description": "ECS cluster name or ARN." },
+            "service": { "type": "string", "minLength": 1, "description": "ECS service name; also the task-definition family." },
+            "containerName": { "type": "string", "minLength": 1, "description": "Name of the container in the task def whose image is swapped." }
+          }
+        },
+        "ecr": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1, "description": "ECR repository URI (registry/host + path), no tag/digest." }
+          }
+        },
+        "codedeploy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["application", "deploymentGroup"],
+          "description": "Required when release.strategy is blue-green (ecs/ec2) or for target ec2.",
+          "properties": {
+            "application": { "type": "string", "minLength": 1 },
+            "deploymentGroup": { "type": "string", "minLength": 1 }
+          }
+        },
+        "lambda": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["functionName", "alias"],
+          "properties": {
+            "functionName": { "type": "string", "minLength": 1 },
+            "alias": { "type": "string", "minLength": 1 }
+          }
+        },
+        "s3": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bucket"],
+          "properties": {
+            "bucket": { "type": "string", "minLength": 1, "description": "Destination static-site bucket." },
+            "distributionId": { "type": "string", "minLength": 1, "description": "CloudFront distribution to invalidate." }
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bucket"],
+          "description": "CI artifact bucket the deploy pulls zips/bundles from (target ec2 / lambda).",
+          "properties": {
+            "bucket": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+
     "runtime": {
       "type": "object",
       "additionalProperties": false,
@@ -59,7 +123,7 @@
         },
         "secrets": {
           "type": "array",
-          "description": "Secret NAMES only — resolved from Secrets Manager / SSM at deploy time by cd-template.yml. Never values.",
+          "description": "Secret NAMES only — resolved from Secrets Manager at deploy time by cd-template.yml. Never values.",
           "items": { "type": "string", "minLength": 1 }
         }
       }

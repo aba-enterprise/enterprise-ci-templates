@@ -2,7 +2,9 @@ name: "Preflight deploy"
 description: >
   Validate a per-app deploy/<env>.yml against its JSON Schema, merge it with the
   central policy/deploy-defaults.yml, and expose the resolved release values and
-  AWS coordinates as typed step outputs for cd-template.yml.
+  routing (region, deploy role) as typed step outputs for cd-template.yml.
+  AWS resource coordinates live in the deploy file's infra: block and are read
+  directly by cd-template.yml.
 
 inputs:
   config-path:
@@ -34,7 +36,6 @@ outputs:
   account_id:     { description: "AWS account id for the environment" }
   deploy_role:    { description: "GitHub-OIDC role ARN to assume" }
   session_name:   { description: "configure-aws-credentials session name" }
-  ssm_prefix:     { description: "SSM prefix <app>-infra publishes coordinates to" }
   # --- release ---
   version:          { description: "artifact ref being deployed ('' = latest, dev only)" }
   strategy:         { description: "rolling | blue-green | canary" }

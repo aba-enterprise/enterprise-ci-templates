@@ -4,9 +4,9 @@
 #  Owned by:  Platform / SRE.
 #
 #  Purpose: single source of truth for values that are identical across all app
-#  deployments (SSM layout, OIDC role naming) and per-environment coordinates
-#  (AWS account, region, default strategy). Resource definitions do NOT belong
-#  here — they live in each app's <app>-infra repo and are published to SSM.
+#  deployments (OIDC role naming) and per-environment settings (AWS account,
+#  region, default strategy, soak). Per-app AWS resource names do NOT belong
+#  here — they live in each app's <app>-config/deploy/<env>.yml (infra: block).
 #
 #  Consumed by:  actions/preflight-deploy  (bundled copy, two dirs up).
 #  Validated against policy/schema/deploy-defaults.schema.json in this repo's CI.
@@ -16,15 +16,8 @@ apiVersion: pipeline.aba-enterprise/v1
 kind: DeployDefaults
 
 common:
-  # <app>-infra writes deploy coordinates under this prefix, e.g.
-  #   /dotnet-sample-app/prod/ecs/cluster
-  #   /dotnet-sample-app/prod/ecs/service
-  #   /dotnet-sample-app/prod/lambda/function-name
-  #   /dotnet-sample-app/prod/s3/bucket   +   /s3/distribution-id
-  ssmPrefixPattern: "/{service}/{env}"
-
-  # GitHub-OIDC deploy role, created per environment by <app>-infra. Trust is
-  # scoped to  repo:<org>/<app>-config:environment:<env>.
+  # GitHub-OIDC deploy role, created per environment alongside the app's AWS
+  # resources. Trust is scoped to  repo:<org>/<app>-config:environment:<env>.
   deployRolePattern: "arn:aws:iam::{account}:role/gha-deploy-{service}"
 
   sessionName: "gha-deploy"

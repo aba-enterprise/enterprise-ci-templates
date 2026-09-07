@@ -5,6 +5,17 @@ service:
   target: ecs
 environment:
   name: prod
+infra:
+  region: us-east-1
+  ecs:
+    cluster: sample-service-prod
+    service: sample-service-prod
+    containerName: app
+  ecr:
+    repository: 333333333333.dkr.ecr.us-east-1.amazonaws.com/sample-service
+  codedeploy:
+    application: sample-service-prod
+    deploymentGroup: sample-service-prod
 release:
   version: "sha256:deadbeef"
   strategy: blue-green

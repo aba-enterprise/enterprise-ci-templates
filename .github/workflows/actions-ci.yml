@@ -72,10 +72,8 @@ jobs:
         run: |
           echo "target=${{ steps.dep.outputs.target }}"
           echo "deploy_role=${{ steps.dep.outputs.deploy_role }}"
-          echo "ssm_prefix=${{ steps.dep.outputs.ssm_prefix }}"
           [ "${{ steps.dep.outputs.target }}" = "ecs" ]
           [ "${{ steps.dep.outputs.environment }}" = "prod" ]
           [ "${{ steps.dep.outputs.strategy }}" = "blue-green" ]
-          [ "${{ steps.dep.outputs.ssm_prefix }}" = "/sample-service/prod" ]
           [ "${{ steps.dep.outputs.deploy_role }}" = "arn:aws:iam::333333333333:role/gha-deploy-sample-service" ]
           [ "${{ steps.dep.outputs.version }}" = "sha256:deadbeef" ]

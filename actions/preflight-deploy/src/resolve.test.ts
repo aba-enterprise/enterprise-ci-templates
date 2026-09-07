@@ -5,7 +5,6 @@ const defaults: DeployDefaults = {
   apiVersion: "pipeline.aba-enterprise/v1",
   kind: "DeployDefaults",
   common: {
-    ssmPrefixPattern: "/{service}/{env}",
     deployRolePattern: "arn:aws:iam::{account}:role/gha-deploy-{service}",
     sessionName: "gha-deploy",
   },
@@ -24,9 +23,8 @@ const base: DeployConfig = {
 };
 
 describe("resolve", () => {
-  it("fills SSM prefix and OIDC role from the env block", () => {
+  it("fills the OIDC role from the env block", () => {
     const out = resolve({ config: base, defaults });
-    expect(out.ssm_prefix).toBe("/dotnet-sample-app/dev");
     expect(out.deploy_role).toBe("arn:aws:iam::111111111111:role/gha-deploy-dotnet-sample-app");
     expect(out.account_id).toBe("111111111111");
     expect(out.runtime_env_json).toBe('{"ASPNETCORE_ENVIRONMENT":"Development"}');

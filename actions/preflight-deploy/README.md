@@ -2,8 +2,10 @@
 
 Validates a per-app `deploy/<env>.yml` against
 `policy/schema/deploy-config.schema.json`, merges it with the central
-`policy/deploy-defaults.yml`, and exposes the resolved release values and AWS
-coordinates as typed step outputs for [`cd-template.yml`](../../.github/workflows/cd-template.yml).
+`policy/deploy-defaults.yml`, and exposes the resolved release values and routing
+(region, OIDC deploy role) as typed step outputs for [`cd-template.yml`](../../.github/workflows/cd-template.yml).
+AWS resource coordinates live in the deploy file's `infra:` block and are read
+directly by `cd-template.yml` — this action does not touch them.
 
 Same shape as [`preflight-config`](../preflight-config) — a bundled TypeScript
 action, pure resolver + `@actions/core` glue, policy files bundled from this repo
@@ -20,7 +22,7 @@ action, pure resolver + `@actions/core` glue, policy files bundled from this rep
     environment: prod              # -> deploy/prod.yml
     version: sha256:abc123         # optional; overrides release.version
 
-# then: ${{ steps.cfg.outputs.deploy_role }}, ${{ steps.cfg.outputs.ssm_prefix }}, ...
+# then: ${{ steps.cfg.outputs.deploy_role }}, ${{ steps.cfg.outputs.region }}, ...
 ```
 
 `validate-only: true` schema-checks the file and exits without emitting outputs —
@@ -30,7 +32,7 @@ used by the config repo's PR check.
 
 | Group | Outputs |
 |-------|---------|
-| routing | `service_name`, `target`, `environment`, `region`, `account_id`, `deploy_role`, `session_name`, `ssm_prefix` |
+| routing | `service_name`, `target`, `environment`, `region`, `account_id`, `deploy_role`, `session_name` |
 | release | `version` (`''` = latest, dev only), `strategy`, `require_approval`, `bake_minutes` |
 | runtime | `desired_count`, `cpu`, `memory`, `container_port`, `timeout_seconds`, `runtime_env_json`, `secret_names` |
 | scaling / health | `scale_min`, `scale_max`, `scale_target_cpu`, `health_path`, `health_grace_seconds` |

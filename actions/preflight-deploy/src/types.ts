@@ -22,6 +22,8 @@ export interface DeployConfig {
   scaling?: { min?: number; max?: number; targetCpu?: number };
   healthcheck?: { path?: string; gracePeriodSeconds?: number };
   s3?: { sourceDir?: string; cacheControl?: string; invalidatePaths?: string[] };
+  // AWS resource coordinates — read directly by cd-template.yml, not the resolver.
+  infra?: Record<string, unknown>;
 }
 
 export interface DeployEnvBlock {
@@ -36,7 +38,6 @@ export interface DeployDefaults {
   apiVersion: string;
   kind: "DeployDefaults";
   common: {
-    ssmPrefixPattern: string;
     deployRolePattern: string;
     sessionName: string;
   };

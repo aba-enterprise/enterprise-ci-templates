@@ -41,7 +41,6 @@ export function resolve({ config, defaults, versionOverride }: ResolveArgs): Out
   const region = config.environment?.region || env.region;
   const strategy = config.release?.strategy || env.strategyDefault;
 
-  const ssmPrefix = fill(defaults.common.ssmPrefixPattern, { service, env: envName });
   const deployRole = fill(defaults.common.deployRolePattern, {
     account: env.account,
     service,
@@ -64,7 +63,6 @@ export function resolve({ config, defaults, versionOverride }: ResolveArgs): Out
     account_id: env.account,
     deploy_role: deployRole,
     session_name: defaults.common.sessionName,
-    ssm_prefix: ssmPrefix,
 
     // release
     version,

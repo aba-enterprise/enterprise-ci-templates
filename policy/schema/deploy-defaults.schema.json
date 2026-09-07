@@ -12,10 +12,9 @@
     "common": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ssmPrefixPattern", "deployRolePattern", "sessionName"],
+      "required": ["deployRolePattern", "sessionName"],
       "properties": {
-        "ssmPrefixPattern": { "type": "string", "minLength": 1, "description": "SSM Parameter Store prefix that <app>-infra writes coordinates to. {service} and {env} are substituted." },
-        "deployRolePattern": { "type": "string", "minLength": 1, "description": "GitHub-OIDC deploy role ARN, created per env by <app>-infra. {account}, {service}, {env} substituted." },
+        "deployRolePattern": { "type": "string", "minLength": 1, "description": "GitHub-OIDC deploy role ARN, created per env alongside the app's AWS resources. {account}, {service}, {env} substituted." },
         "sessionName": { "type": "string", "minLength": 1 }
       }
     },
