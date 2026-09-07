@@ -195,11 +195,16 @@ blob, never a fresh `npm install`.
 | Package | Version | License | Publisher / provenance | Role |
 |---------|---------|---------|------------------------|------|
 | `ajv` | `8.20.0` (`^8.17.1`) | MIT | [OpenJS Foundation](https://openjsf.org) project (maint. Evgeny Poberezkin); one of the most-depended-on packages on npm | JSON Schema (draft 2020-12) validation of the app config **and** the policy files |
-| `yaml` | `2.9.0` (`^2.6.1`) | ISC | `eemeli` — sole maintainer, widely used, no native deps | Parse `config.yml` / policy / defaults |
+| `js-yaml` | `4.3.2` (`^4.1.0`) | MIT | [`nodeca`](https://github.com/nodeca) org — multiple maintainers; the YAML parser bundled by ESLint and webpack | Parse `config.yml` / policy / defaults |
 
 Ajv's transitive deps (`fast-deep-equal`, `json-schema-traverse`,
 `require-from-string`, `uri-js`) are all MIT/BSD and vendored into the same
-bundle. `yaml` has zero dependencies.
+bundle. `js-yaml`'s only dependency is `argparse@2` (Python-2.0 licence,
+`nodeca`, used by its CLI — not the parse path `readYaml` calls). `js-yaml`
+follows YAML 1.1, so unquoted
+`yes/no/on/off` parse as booleans; the schemas pin every scalar to a
+string/enum, so a mistyped value fails validation rather than resolving to the
+wrong type.
 
 Everything else in `actions/` is **dev-only** (`typescript`, `eslint`, `jest`,
 `ncc`, `@types/*`) — used to lint, test and build, never shipped in `dist/` and

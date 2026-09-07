@@ -1,8 +1,15 @@
 import * as fs from "fs";
-import { parse as parseYaml } from "yaml";
+import { load as parseYaml } from "js-yaml";
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020";
 
-/** Read and parse a YAML file. Throws with the path if it is missing. */
+/**
+ * Read and parse a YAML file. Throws with the path if it is missing.
+ *
+ * js-yaml follows YAML 1.1, so unquoted `yes/no/on/off` parse as booleans and
+ * unquoted `1.0` as a number. The JSON Schemas in policy/schema/ pin every
+ * scalar to a string/enum, so a mistyped value fails validation loudly rather
+ * than resolving to the wrong type silently.
+ */
 export function readYaml<T>(file: string): T {
   if (!fs.existsSync(file)) {
     throw new Error(`file not found: ${file}`);
