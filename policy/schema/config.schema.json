@@ -8,9 +8,8 @@
   "required": ["apiVersion", "metadata", "test"],
   "properties": {
     "apiVersion": {
-      "type": "string",
-      "pattern": "^ci/v[0-9]+$",
-      "description": "Config contract version, e.g. 'ci/v2'. Lets this schema evolve without breaking older repos."
+      "const": "ci/v1",
+      "description": "Version of the ci-config contract this file targets. The preflight-config action reads it to pick the matching parse/merge rules, so a future breaking change to the format ships as 'ci/v2' without misreading existing repos. Only 'ci/v1' is supported today; an unknown version fails validation rather than being silently misread."
     },
 
     "metadata": {

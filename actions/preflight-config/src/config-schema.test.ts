@@ -22,7 +22,7 @@ const FIXTURE = path.resolve(
 );
 
 const good: AppConfig = {
-  apiVersion: "ci/v2",
+  apiVersion: "ci/v1",
   metadata: { name: "widget-api", language: "dotnet" },
   test: { command: "dotnet test" },
 };
@@ -46,8 +46,8 @@ describe("config.schema.json", () => {
     expect(() => check(rest)).toThrow(/required property 'apiVersion'/);
   });
 
-  it("rejects a malformed apiVersion", () => {
-    expect(() => check({ ...good, apiVersion: "v2" })).toThrow(
+  it("rejects an unsupported apiVersion", () => {
+    expect(() => check({ ...good, apiVersion: "ci/v2" })).toThrow(
       /schema validation/,
     );
   });

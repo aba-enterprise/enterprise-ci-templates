@@ -1,5 +1,5 @@
 # Fixture consumed by the action's smoke test in CI. Not a real app config.
-apiVersion: ci/v2
+apiVersion: ci/v1
 metadata:
   name: sample-service
   language: dotnet
