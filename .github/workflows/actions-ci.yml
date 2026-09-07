@@ -48,9 +48,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cfg
-        uses: ./actions/pipeline-config
+        uses: ./actions/preflight-config
         with:
-          config-path: actions/pipeline-config/test/fixtures/config.dotnet.yml
+          config-path: actions/preflight-config/test/fixtures/config.dotnet.yml
           environment: prod
       - name: Assert resolved outputs
         run: |

@@ -57,7 +57,7 @@ async function run(): Promise<void> {
         `backend=${outputs.runner_backend} os=${outputs.runner_os}`,
     );
     await core.summary
-      .addHeading("Pipeline config", 3)
+      .addHeading("Preflight config", 3)
       .addTable([
         [
           { data: "Key", header: true },

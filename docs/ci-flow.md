@@ -6,7 +6,7 @@ pipeline in this repo, what decides each step, and where every value comes from.
 - **Scope:** CI only — restore, lint, build, test, scan, publish artifact.
   Deployment lives in a separate per-app repo and is out of scope here.
 - **Entry point:** [`.github/workflows/ci-template.yml`](../.github/workflows/ci-template.yml) (`name: Reusable CI`), called via `workflow_call`.
-- **Config resolver:** [`actions/pipeline-config`](../actions/pipeline-config) — a bundled TypeScript action.
+- **Config resolver:** [`actions/preflight-config`](../actions/preflight-config) — a bundled TypeScript action.
 - **Central policy:** [`policy/pipeline-policy.yml`](../policy/pipeline-policy.yml) (gates) + [`policy/pipeline-defaults.yml`](../policy/pipeline-defaults.yml) (non-secret defaults).
 
 ---
@@ -76,13 +76,13 @@ outputs shown below.
 
 ## 4. Preflight — the resolve step
 
-Job `Preflight` runs one step: `actions/pipeline-config`.
+Job `Preflight` runs one step: `actions/preflight-config`.
 
 1. **Load** `ci-config/config.yml` from the app workspace
    (`GITHUB_WORKSPACE` + `config-path`).
 2. **Load** `pipeline-policy.yml` and `pipeline-defaults.yml` from the action's
    **own bundled copy** — resolved two dirs up from the action
-   (`actions/pipeline-config → actions → repo root → policy/`). No second
+   (`actions/preflight-config → actions → repo root → policy/`). No second
    `actions/checkout` of this repo is needed. `policy-path` / `defaults-path`
    inputs override this for local testing.
 3. **Validate** all three documents against `policy/schema/*.schema.json` (Ajv,
@@ -92,7 +92,7 @@ Job `Preflight` runs one step: `actions/pipeline-config`.
    multi-line error (e.g. `/metadata/language must be equal to one of the
    allowed values`). The app-config schema is the **only** check that file ever
    gets — nothing in this repo can see it, since it lives in the app repo.
-4. **Resolve** ([`src/resolve.ts`](../actions/pipeline-config/src/resolve.ts), pure, unit-tested) — merge rules:
+4. **Resolve** ([`src/resolve.ts`](../actions/preflight-config/src/resolve.ts), pure, unit-tested) — merge rules:
    - `restore_cmd` is chosen by language (`npm ci`, `dotnet restore`,
      `mvn -B dependency:go-offline`, `pip install -r requirements.txt`,
      `nuget restore`) — **workflow-owned**, not app-settable.
@@ -180,14 +180,14 @@ max 30 days — see `pipeline-policy.yml` `exceptions`).
 | Workflow | Protects |
 |----------|----------|
 | [`policy-validate.yml`](../.github/workflows/policy-validate.yml) | `policy/**` — schema-validates both policy files + yamllint on every PR. A bad gate switch can't merge, so it can't ship org-wide. |
-| [`actions-ci.yml`](../.github/workflows/actions-ci.yml) | `actions/**` — lint, unit test, build every action, fail if a committed `dist/` is stale, then smoke-test `pipeline-config` against `test/fixtures/config.dotnet.yml`. |
+| [`actions-ci.yml`](../.github/workflows/actions-ci.yml) | `actions/**` — lint, unit test, build every action, fail if a committed `dist/` is stale, then smoke-test `preflight-config` against `test/fixtures/config.dotnet.yml`. |
 
 `actions/*/dist/` is committed on purpose — it is what each action's
 `runs.main` executes. Rebuild with `cd actions && npm run all`.
 
 ### Dependencies / supply chain
 
-The `pipeline-config` action has two npm runtime dependencies, pinned +
+The `preflight-config` action has two npm runtime dependencies, pinned +
 integrity-hashed in [`package-lock.json`](../actions/package-lock.json) and
 `@vercel/ncc`-bundled into the committed `dist/index.js` — a pipeline run
 executes that fixed, reviewed blob, never a fresh `npm install`.

@@ -8,7 +8,7 @@ export { readYaml, validate } from "@pipeline/shared";
 /**
  * The action ships with its own copy of policy/ (same repo). GITHUB_ACTION_PATH
  * points at the dir containing action.yml; the policy folder is two levels up
- * (actions/pipeline-config -> actions -> repo root -> policy).
+ * (actions/preflight-config -> actions -> repo root -> policy).
  */
 export function bundledPolicyDir(): string {
   const actionPath =

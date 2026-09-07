@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) preflight  - The pipeline-config action merges the per-app
+  # 1) preflight  - The preflight-config action merges the per-app
   #    ci-config/config.yml with the central policy/ (pipeline-policy.yml +
   #    pipeline-defaults.yml), schema-validates them, and emits typed outputs.
   # ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ jobs:
 
       - name: Load config, policy and defaults constants
         id: parse
-        uses: aba-enterprise/enterprise-ci-templates/actions/pipeline-config@feature-ciconfig
+        uses: aba-enterprise/enterprise-ci-templates/actions/preflight-config@feature-ciconfig
         with:
           config-path: ${{ inputs.config-path }}
           environment: ${{ inputs.environment }}

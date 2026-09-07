@@ -36176,7 +36176,7 @@ async function run() {
         core.info(`Resolved '${outputs.language}' | env=${environment} ` +
             `backend=${outputs.runner_backend} os=${outputs.runner_os}`);
         await core.summary
-            .addHeading("Pipeline config", 3)
+            .addHeading("Preflight config", 3)
             .addTable([
             [
                 { data: "Key", header: true },
@@ -36250,7 +36250,7 @@ Object.defineProperty(exports, "validate", ({ enumerable: true, get: function ()
 /**
  * The action ships with its own copy of policy/ (same repo). GITHUB_ACTION_PATH
  * points at the dir containing action.yml; the policy folder is two levels up
- * (actions/pipeline-config -> actions -> repo root -> policy).
+ * (actions/preflight-config -> actions -> repo root -> policy).
  */
 function bundledPolicyDir() {
     const actionPath = process.env.GITHUB_ACTION_PATH ?? path.join(__dirname, "..");

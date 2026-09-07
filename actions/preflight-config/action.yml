@@ -1,4 +1,4 @@
-name: "Pipeline config"
+name: "Preflight config"
 description: >
   Load the per-app ci-config/config.yml, merge it with the central
   policy/pipeline-policy.yml (gates) and policy/pipeline-defaults.yml

@@ -14,9 +14,9 @@ actions/
 ├── .eslintrc.json          # cascades to all workspaces
 ├── jest.config.js          # roots[] — lists every workspace with tests
 ├── shared/                 # @pipeline/shared — YAML load + JSON Schema validation
-└── pipeline-config/        # action: resolve per-app config against central policy
+└── preflight-config/        # action: resolve per-app config against central policy
     ├── action.yml          # runs: using node24, main dist/index.js
-    ├── package.json        # @pipeline/pipeline-config-action — ncc build script
+    ├── package.json        # @pipeline/preflight-config-action — ncc build script
     ├── tsconfig.json       # extends ../tsconfig.base.json
     ├── src/                # index.ts (core glue) + logic + *.test.ts
     ├── test/fixtures/      # sample inputs for the CI smoke job
@@ -78,7 +78,7 @@ runs:
   main: dist/index.js
 ```
 
-**`package.json`** (copy `pipeline-config/package.json`)
+**`package.json`** (copy `preflight-config/package.json`)
 
 ```json
 {
@@ -97,7 +97,7 @@ runs:
 }
 ```
 
-**`tsconfig.json`** (identical to `pipeline-config/tsconfig.json`)
+**`tsconfig.json`** (identical to `preflight-config/tsconfig.json`)
 
 ```json
 {

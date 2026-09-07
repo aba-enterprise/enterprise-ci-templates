@@ -1,4 +1,4 @@
-# `pipeline-config` action
+# `preflight-config` action
 
 Merges the per-app `ci-config/config.yml` with the central
 `policy/pipeline-policy.yml` (gates) and `policy/pipeline-defaults.yml`
@@ -18,7 +18,7 @@ schema-checked on every run.
 ```yaml
 - uses: actions/checkout@v4
 - id: parse
-  uses: aba-enterprise/enterprise-ci-templates/actions/pipeline-config@v1
+  uses: aba-enterprise/enterprise-ci-templates/actions/preflight-config@v1
   with:
     config-path: ci-config/config.yml   # optional (default)
     environment: nonprod                # optional (nonprod | prod)

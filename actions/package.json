@@ -5,13 +5,13 @@
   "description": "Workspace root for the enterprise pipeline GitHub Actions.",
   "workspaces": [
     "shared",
-    "pipeline-config"
+    "preflight-config"
   ],
   "scripts": {
     "lint": "eslint \"*/src/**/*.ts\"",
     "test": "jest",
     "typecheck": "tsc -p tsconfig.json",
-    "build": "npm run build -w shared && npm run build -w pipeline-config",
+    "build": "npm run build -w shared && npm run build -w preflight-config",
     "all": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
