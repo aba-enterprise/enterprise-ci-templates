@@ -14,13 +14,15 @@ actions/
 ├── .eslintrc.json          # cascades to all workspaces
 ├── jest.config.js          # testMatch glob — every workspace's src/*.test.ts
 ├── shared/                 # @pipeline/shared — YAML load + JSON Schema validation
-└── preflight-config/        # action: resolve per-app config against central policy
-    ├── action.yml          # runs: using node24, main dist/index.js
-    ├── package.json        # @pipeline/preflight-config-action — ncc build script
-    ├── tsconfig.json       # extends ../tsconfig.base.json
-    ├── src/                # index.ts (core glue) + logic + *.test.ts
-    ├── test/fixtures/      # sample inputs for the CI smoke job
-    └── dist/               # ncc bundle — COMMITTED, executed by runs.main
+├── preflight-config/       # action: resolve per-app CI config against central policy
+│   ├── action.yml          # runs: using node24, main dist/index.js
+│   ├── package.json        # @pipeline/preflight-config-action — ncc build script
+│   ├── tsconfig.json       # extends ../tsconfig.base.json
+│   ├── src/                # index.ts (core glue) + logic + *.test.ts
+│   ├── test/fixtures/      # sample inputs for the CI smoke job
+│   └── dist/               # ncc bundle — COMMITTED, executed by runs.main
+└── preflight-deploy/       # action: resolve per-app deploy/<env>.yml for cd-template.yml
+    └── …                   # same layout
 ```
 
 ## Develop

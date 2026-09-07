@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/deploy-config.schema.json",
+  "title": "DeployConfig",
+  "description": "Per-app, per-environment release values (deploy/<env>.yml). Carries WHAT to run and with which knobs — never resource definitions (those live in <app>-infra) and never deploy logic (that lives in cd-template.yml).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "service", "environment", "release"],
+  "properties": {
+    "apiVersion": {
+      "const": "cd/v1",
+      "description": "Version of the deploy-config contract this file targets. 'cd/v1' today; a breaking format change ships as 'cd/v2' so existing repos keep resolving. An unknown value fails validation."
+    },
+
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "target"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "App identifier; must match the CI artifact name and the <app>-infra SSM prefix." },
+        "target": { "enum": ["ecs", "ec2", "lambda", "s3"], "description": "Deploy target — selects the branch of cd-template.yml that runs." }
+      }
+    },
+
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "enum": ["dev", "uat", "prod"] },
+        "region": { "type": "string", "minLength": 1, "description": "Optional override of the region in deploy-defaults.yml." }
+      }
+    },
+
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy"],
+      "properties": {
+        "version": { "type": "string", "description": "Immutable artifact ref to deploy: image digest (sha256:...), Lambda zip sha, or static bundle id. Empty is allowed only for env 'dev' (deploys the latest published artifact)." },
+        "strategy": { "enum": ["rolling", "blue-green", "canary"], "description": "rolling: all targets; blue-green: ecs/ec2 via CodeDeploy; canary: lambda alias shift." }
+      }
+    },
+
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "ecs / ec2 / lambda runtime knobs. Ignored for target s3.",
+      "properties": {
+        "desiredCount": { "type": "integer", "minimum": 0 },
+        "cpu": { "type": "integer", "minimum": 128, "description": "ECS task CPU units / Lambda memory hint." },
+        "memory": { "type": "integer", "minimum": 128 },
+        "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "description": "Lambda function timeout." },
+        "env": {
+          "type": "object",
+          "description": "Non-secret environment variables. Secrets go in `secrets`, never here.",
+          "additionalProperties": { "type": "string" }
+        },
+        "secrets": {
+          "type": "array",
+          "description": "Secret NAMES only — resolved from Secrets Manager / SSM at deploy time by cd-template.yml. Never values.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "scaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Autoscaling bounds. ecs/ec2 only.",
+      "properties": {
+        "min": { "type": "integer", "minimum": 0 },
+        "max": { "type": "integer", "minimum": 1 },
+        "targetCpu": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+
+    "healthcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "ALB / target-group health check. ecs/ec2 only.",
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "gracePeriodSeconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Static-site knobs. target s3 only.",
+      "properties": {
+        "sourceDir": { "type": "string", "minLength": 1, "description": "Directory inside the build artifact to sync." },
+        "cacheControl": { "type": "string", "minLength": 1 },
+        "invalidatePaths": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

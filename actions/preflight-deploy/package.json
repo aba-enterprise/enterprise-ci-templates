@@ -1,0 +1,15 @@
+{
+  "name": "@pipeline/preflight-deploy-action",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action: validate a per-app deploy/<env>.yml, merge it with central deploy-defaults.yml, and emit typed release/coordinate outputs for cd-template.yml.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@pipeline/shared": "*"
+  }
+}

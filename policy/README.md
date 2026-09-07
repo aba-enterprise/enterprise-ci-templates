@@ -9,8 +9,11 @@ lower anything here.
 |------|--------|---------------|-------------------------------|
 | `pipeline-policy.yml` | `PipelinePolicy` | Mandatory gate switches — which scans run, `block` vs `warn`, required tools, coverage floor, waiver rules. | **Yes** |
 | `pipeline-defaults.yml` | `PipelineDefaults` | Shared **non-secret** defaults. `common:` = identical everywhere (registry, runner, job limits, the single SonarQube + Veracode instances). `environments:` = per-target (`nonprod` / `prod`) endpoints for Vault, Artifactory, Prisma. | No |
-| `schema/pipeline-{policy,defaults}.schema.json` | — | JSON Schema for the two files above, enforced by the `Validate CI policy` workflow on every PR touching `policy/`. | — |
+| `deploy-defaults.yml` | `DeployDefaults` | Shared **non-secret** CD defaults. `common:` = SSM prefix + OIDC deploy-role naming patterns. `environments:` = per-env (`dev` / `uat` / `prod`) AWS account, region, default strategy, soak time. Consumed by the `preflight-deploy` action. | No |
+| `schema/pipeline-{policy,defaults}.schema.json` | — | JSON Schema for the two `pipeline-*` files above, enforced by the `Validate CI policy` workflow on every PR touching `policy/`. | — |
 | `schema/config.schema.json` | — | JSON Schema for the **per-app** `ci-config/config.yml`. Not an instance in this repo — the `preflight-config` action validates each app's config against it at pipeline runtime. Requires `apiVersion` (`ci/v1`), `metadata` (`name` + `language`), and `test.command`; rejects unknown keys. | — |
+| `schema/deploy-config.schema.json` | — | JSON Schema for the **per-app** `deploy/<env>.yml` in each `<app>-config` repo. The `preflight-deploy` action validates it at deploy time. Requires `apiVersion` (`cd/v1`), `service` (`name` + `target`), `environment.name`, and `release.strategy`; rejects unknown keys. | — |
+| `schema/deploy-defaults.schema.json` | — | JSON Schema for `deploy-defaults.yml`. | — |
 
 ## Rules
 

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aba-enterprise/enterprise-ci-templates/policy/schema/deploy-defaults.schema.json",
+  "title": "DeployDefaults",
+  "description": "Central, non-secret CD defaults owned by Platform / SRE. Per-app deploy/<env>.yml never redefines these.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "common", "environments"],
+  "properties": {
+    "apiVersion": { "const": "pipeline.aba-enterprise/v1" },
+    "kind": { "const": "DeployDefaults" },
+    "common": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ssmPrefixPattern", "deployRolePattern", "sessionName"],
+      "properties": {
+        "ssmPrefixPattern": { "type": "string", "minLength": 1, "description": "SSM Parameter Store prefix that <app>-infra writes coordinates to. {service} and {env} are substituted." },
+        "deployRolePattern": { "type": "string", "minLength": 1, "description": "GitHub-OIDC deploy role ARN, created per env by <app>-infra. {account}, {service}, {env} substituted." },
+        "sessionName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dev", "uat", "prod"],
+      "patternProperties": {
+        "^(dev|uat|prod)$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["account", "region", "requireApproval", "strategyDefault"],
+          "properties": {
+            "account": { "type": "string", "pattern": "^[0-9]{12}$", "description": "AWS account id — one account per environment." },
+            "region": { "type": "string", "minLength": 1 },
+            "requireApproval": { "type": "boolean", "description": "Informational mirror of the GitHub Environment protection rule." },
+            "strategyDefault": { "enum": ["rolling", "blue-green", "canary"] },
+            "bakeMinutes": { "type": "integer", "minimum": 0, "description": "Post-deploy soak before the job reports success (blue-green / canary)." }
+          }
+        }
+      }
+    }
+  }
+}

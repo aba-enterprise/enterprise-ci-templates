@@ -1,0 +1,23 @@
+# Fixture consumed by the action's smoke test in CI. Not a real app config.
+apiVersion: cd/v1
+service:
+  name: sample-service
+  target: ecs
+environment:
+  name: prod
+release:
+  version: "sha256:deadbeef"
+  strategy: blue-green
+runtime:
+  desiredCount: 3
+  containerPort: 8080
+  env:
+    ASPNETCORE_ENVIRONMENT: Production
+  secrets:
+    - ConnectionStrings__Default
+scaling:
+  min: 3
+  max: 9
+  targetCpu: 60
+healthcheck:
+  path: /health

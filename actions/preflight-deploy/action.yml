@@ -1,0 +1,64 @@
+name: "Preflight deploy"
+description: >
+  Validate a per-app deploy/<env>.yml against its JSON Schema, merge it with the
+  central policy/deploy-defaults.yml, and expose the resolved release values and
+  AWS coordinates as typed step outputs for cd-template.yml.
+
+inputs:
+  config-path:
+    description: "Directory holding the per-env deploy files, relative to the workspace."
+    required: false
+    default: deploy
+  environment:
+    description: "Target environment (dev | uat | prod). Selects deploy/<environment>.yml."
+    required: true
+  version:
+    description: "Immutable artifact ref to deploy (image digest / zip sha / bundle id). Overrides release.version in the file."
+    required: false
+    default: ""
+  validate-only:
+    description: "Only schema-validate the file and exit (used by the config repo's PR check)."
+    required: false
+    default: "false"
+  defaults-path:
+    description: "Override path to deploy-defaults.yml (defaults to the copy bundled with this action)."
+    required: false
+    default: ""
+
+outputs:
+  # --- identity / routing ---
+  service_name:   { description: "service.name" }
+  target:         { description: "service.target — ecs | ec2 | lambda | s3" }
+  environment:    { description: "resolved environment name" }
+  region:         { description: "environment.region or deploy-defaults region" }
+  account_id:     { description: "AWS account id for the environment" }
+  deploy_role:    { description: "GitHub-OIDC role ARN to assume" }
+  session_name:   { description: "configure-aws-credentials session name" }
+  ssm_prefix:     { description: "SSM prefix <app>-infra publishes coordinates to" }
+  # --- release ---
+  version:          { description: "artifact ref being deployed ('' = latest, dev only)" }
+  strategy:         { description: "rolling | blue-green | canary" }
+  require_approval: { description: "true|false — mirror of the GitHub Environment rule" }
+  bake_minutes:     { description: "post-deploy soak before success" }
+  # --- runtime (ecs / ec2 / lambda) ---
+  desired_count:    { description: "runtime.desiredCount" }
+  cpu:              { description: "runtime.cpu" }
+  memory:           { description: "runtime.memory" }
+  container_port:   { description: "runtime.containerPort" }
+  timeout_seconds:  { description: "runtime.timeoutSeconds (lambda)" }
+  runtime_env_json: { description: "runtime.env as a JSON object string" }
+  secret_names:     { description: "runtime.secrets, comma-separated (names only)" }
+  # --- scaling / health (ecs / ec2) ---
+  scale_min:            { description: "scaling.min" }
+  scale_max:            { description: "scaling.max" }
+  scale_target_cpu:     { description: "scaling.targetCpu" }
+  health_path:          { description: "healthcheck.path" }
+  health_grace_seconds: { description: "healthcheck.gracePeriodSeconds" }
+  # --- static site (s3) ---
+  s3_source_dir:       { description: "s3.sourceDir" }
+  s3_cache_control:    { description: "s3.cacheControl" }
+  s3_invalidate_paths: { description: "s3.invalidatePaths, comma-separated (default /*)" }
+
+runs:
+  using: node24
+  main: dist/index.js

@@ -62,3 +62,20 @@ jobs:
           [ -n "${{ steps.cfg.outputs.coverage_min }}" ]
           [ "${{ steps.cfg.outputs.environment }}" = "prod" ]
           [ "${{ steps.cfg.outputs.artifactory_maven_repo }}" = "libs-release" ]
+
+      - id: dep
+        uses: ./actions/preflight-deploy
+        with:
+          config-path: actions/preflight-deploy/test/fixtures
+          environment: prod
+      - name: Assert resolved deploy outputs
+        run: |
+          echo "target=${{ steps.dep.outputs.target }}"
+          echo "deploy_role=${{ steps.dep.outputs.deploy_role }}"
+          echo "ssm_prefix=${{ steps.dep.outputs.ssm_prefix }}"
+          [ "${{ steps.dep.outputs.target }}" = "ecs" ]
+          [ "${{ steps.dep.outputs.environment }}" = "prod" ]
+          [ "${{ steps.dep.outputs.strategy }}" = "blue-green" ]
+          [ "${{ steps.dep.outputs.ssm_prefix }}" = "/sample-service/prod" ]
+          [ "${{ steps.dep.outputs.deploy_role }}" = "arn:aws:iam::333333333333:role/gha-deploy-sample-service" ]
+          [ "${{ steps.dep.outputs.version }}" = "sha256:deadbeef" ]

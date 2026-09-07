@@ -5,7 +5,8 @@
   "description": "Workspace root for the enterprise pipeline GitHub Actions.",
   "workspaces": [
     "shared",
-    "preflight-config"
+    "preflight-config",
+    "preflight-deploy"
   ],
   "scripts": {
     "lint": "eslint \"*/src/**/*.ts\"",

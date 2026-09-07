@@ -1,0 +1,275 @@
+# =============================================================================
+#  Reusable CD workflow  -  cd-template.yml
+#  Location: aba-enterprise/enterprise-ci-templates/.github/workflows/cd-template.yml
+#
+#  Scope: CD ONLY. Deploys an already-built, immutable artifact to one AWS
+#  environment. It never builds. Called by <app>-config/.github/workflows/deploy.yml.
+#
+#  Split of concerns:
+#    <app>          (CI)     - builds + publishes the artifact (image digest / zip / bundle)
+#    <app>-infra    (IaC)    - creates every AWS resource + the OIDC deploy role,
+#                              and publishes coordinates to SSM  /<service>/<env>/...
+#    <app>-config   (values) - deploy/<env>.yml : what version, which knobs
+#    THIS workflow  (logic)  - assume role, resolve SSM coords, deploy, soak
+#
+#  Auth: GitHub OIDC only. No long-lived AWS keys, no repo secrets.
+#  Promotion: build once in CI, pass the SAME `version` through dev -> uat -> prod.
+# =============================================================================
+
+name: Reusable CD
+
+on:
+  workflow_call:
+    inputs:
+      config-path:
+        description: "Directory holding the per-env deploy files."
+        type: string
+        default: deploy
+      environment:
+        description: "Target environment: dev | uat | prod."
+        type: string
+        required: true
+      version:
+        description: "Immutable artifact ref to deploy. Empty = latest (dev only)."
+        type: string
+        default: ""
+
+permissions:
+  id-token: write      # required for OIDC role assumption
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) preflight - validate deploy/<env>.yml, merge central deploy-defaults.yml,
+  #    emit release values + AWS coordinates as typed outputs.
+  # ---------------------------------------------------------------------------
+  Preflight_Deploy:
+    name: Preflight deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      service_name:   ${{ steps.cfg.outputs.service_name }}
+      target:         ${{ steps.cfg.outputs.target }}
+      environment:    ${{ steps.cfg.outputs.environment }}
+      region:         ${{ steps.cfg.outputs.region }}
+      deploy_role:    ${{ steps.cfg.outputs.deploy_role }}
+      session_name:   ${{ steps.cfg.outputs.session_name }}
+      ssm_prefix:     ${{ steps.cfg.outputs.ssm_prefix }}
+      version:        ${{ steps.cfg.outputs.version }}
+      strategy:       ${{ steps.cfg.outputs.strategy }}
+      bake_minutes:   ${{ steps.cfg.outputs.bake_minutes }}
+      desired_count:  ${{ steps.cfg.outputs.desired_count }}
+      container_port: ${{ steps.cfg.outputs.container_port }}
+      timeout_seconds: ${{ steps.cfg.outputs.timeout_seconds }}
+      runtime_env_json: ${{ steps.cfg.outputs.runtime_env_json }}
+      secret_names:   ${{ steps.cfg.outputs.secret_names }}
+      scale_min:      ${{ steps.cfg.outputs.scale_min }}
+      scale_max:      ${{ steps.cfg.outputs.scale_max }}
+      scale_target_cpu: ${{ steps.cfg.outputs.scale_target_cpu }}
+      health_path:    ${{ steps.cfg.outputs.health_path }}
+      s3_source_dir:  ${{ steps.cfg.outputs.s3_source_dir }}
+      s3_cache_control: ${{ steps.cfg.outputs.s3_cache_control }}
+      s3_invalidate_paths: ${{ steps.cfg.outputs.s3_invalidate_paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: cfg
+        uses: aba-enterprise/enterprise-ci-templates/actions/preflight-deploy@v1
+        with:
+          config-path: ${{ inputs.config-path }}
+          environment: ${{ inputs.environment }}
+          version:     ${{ inputs.version }}
+
+  # ---------------------------------------------------------------------------
+  # 2) deploy - assume the env's OIDC role, resolve infra coordinates from SSM,
+  #    run the target-specific deploy, then soak.
+  #
+  #    `environment:` binds the GitHub Environment so its protection rules
+  #    (required reviewers for uat/prod, wait timer, branch restriction) gate
+  #    this job before any AWS call.
+  # ---------------------------------------------------------------------------
+  Deploy:
+    name: Deploy (${{ needs.Preflight_Deploy.outputs.target }})
+    needs: Preflight_Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-${{ needs.Preflight_Deploy.outputs.service_name }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      SERVICE: ${{ needs.Preflight_Deploy.outputs.service_name }}
+      VERSION: ${{ needs.Preflight_Deploy.outputs.version }}
+      SSM_PREFIX: ${{ needs.Preflight_Deploy.outputs.ssm_prefix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:    ${{ needs.Preflight_Deploy.outputs.deploy_role }}
+          role-session-name: ${{ needs.Preflight_Deploy.outputs.session_name }}
+          aws-region:        ${{ needs.Preflight_Deploy.outputs.region }}
+
+      - name: Resolve infra coordinates from SSM
+        id: coord
+        shell: bash
+        run: |
+          set -euo pipefail
+          get() { aws ssm get-parameter --name "$SSM_PREFIX/$1" \
+                    --query Parameter.Value --output text 2>/dev/null || true; }
+          {
+            echo "ecs_cluster=$(get ecs/cluster)"
+            echo "ecs_service=$(get ecs/service)"
+            echo "ecs_container=$(get ecs/container-name)"
+            echo "ecr_repo=$(get ecr/repository)"
+            echo "codedeploy_app=$(get codedeploy/application)"
+            echo "codedeploy_group=$(get codedeploy/deployment-group)"
+            echo "lambda_function=$(get lambda/function-name)"
+            echo "lambda_alias=$(get lambda/alias)"
+            echo "artifact_bucket=$(get artifact/bucket)"
+            echo "s3_bucket=$(get s3/bucket)"
+            echo "s3_distribution=$(get s3/distribution-id)"
+          } >> "$GITHUB_OUTPUT"
+
+      # =====================================================================
+      #  ECS  -  image already in ECR (by digest). Rolling = update-service;
+      #  blue-green = CodeDeploy.
+      # =====================================================================
+      - name: Deploy to ECS
+        if: needs.Preflight_Deploy.outputs.target == 'ecs'
+        shell: bash
+        env:
+          CLUSTER: ${{ steps.coord.outputs.ecs_cluster }}
+          ECS_SERVICE: ${{ steps.coord.outputs.ecs_service }}
+          CONTAINER: ${{ steps.coord.outputs.ecs_container }}
+          ECR_REPO: ${{ steps.coord.outputs.ecr_repo }}
+          STRATEGY: ${{ needs.Preflight_Deploy.outputs.strategy }}
+          DESIRED: ${{ needs.Preflight_Deploy.outputs.desired_count }}
+        run: |
+          set -euo pipefail
+          IMAGE="${ECR_REPO}@${VERSION:?ECS deploy needs a resolved image digest}"
+
+          # Take the live task definition, swap the image, register a new revision.
+          aws ecs describe-task-definition --task-definition "$ECS_SERVICE" \
+            --query taskDefinition > taskdef.json
+          jq --arg img "$IMAGE" --arg c "$CONTAINER" '
+            .containerDefinitions = (.containerDefinitions
+              | map(if .name == $c then .image = $img else . end))
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+                  .compatibilities,.registeredAt,.registeredBy)
+          ' taskdef.json > new-taskdef.json
+          NEW_TD=$(aws ecs register-task-definition \
+            --cli-input-json file://new-taskdef.json \
+            --query taskDefinition.taskDefinitionArn --output text)
+          echo "registered $NEW_TD"
+
+          if [ "$STRATEGY" = "blue-green" ]; then
+            # CodeDeploy consumes the task def via an appspec; deployment group
+            # is pre-created by <app>-infra.
+            printf 'version: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: "%s"\n        LoadBalancerInfo:\n          ContainerName: "%s"\n          ContainerPort: %s\n' \
+              "$NEW_TD" "$CONTAINER" "${{ needs.Preflight_Deploy.outputs.container_port }}" > appspec.yaml
+            aws deploy create-deployment \
+              --application-name "${{ steps.coord.outputs.codedeploy_app }}" \
+              --deployment-group-name "${{ steps.coord.outputs.codedeploy_group }}" \
+              --revision "revisionType=AppSpecContent,appSpecContent={content='$(cat appspec.yaml)'}"
+          else
+            aws ecs update-service --cluster "$CLUSTER" --service "$ECS_SERVICE" \
+              --task-definition "$NEW_TD" \
+              ${DESIRED:+--desired-count "$DESIRED"} \
+              --force-new-deployment
+            aws ecs wait services-stable --cluster "$CLUSTER" --services "$ECS_SERVICE"
+          fi
+
+      # =====================================================================
+      #  EC2  -  CodeDeploy against an Auto Scaling group. Artifact bundle
+      #  pulled from the CI artifact bucket by version.
+      # =====================================================================
+      - name: Deploy to EC2 (CodeDeploy)
+        if: needs.Preflight_Deploy.outputs.target == 'ec2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${VERSION:?EC2 deploy needs a resolved bundle version}"
+          aws deploy create-deployment \
+            --application-name "${{ steps.coord.outputs.codedeploy_app }}" \
+            --deployment-group-name "${{ steps.coord.outputs.codedeploy_group }}" \
+            --s3-location "bucket=${{ steps.coord.outputs.artifact_bucket }},key=${SERVICE}/${VERSION}.zip,bundleType=zip" \
+            --file-exists-behavior OVERWRITE \
+            --query deploymentId --output text | tee deployment-id.txt
+          aws deploy wait deployment-successful --deployment-id "$(cat deployment-id.txt)"
+
+      # =====================================================================
+      #  Lambda  -  update code by version, publish, shift the alias.
+      #  canary strategy => CodeDeploy Lambda deployment (linear/canary).
+      # =====================================================================
+      - name: Deploy to Lambda
+        if: needs.Preflight_Deploy.outputs.target == 'lambda'
+        shell: bash
+        env:
+          FUNCTION: ${{ steps.coord.outputs.lambda_function }}
+          ALIAS: ${{ steps.coord.outputs.lambda_alias }}
+        run: |
+          set -euo pipefail
+          : "${VERSION:?Lambda deploy needs a resolved zip version}"
+          aws lambda update-function-code --function-name "$FUNCTION" \
+            --s3-bucket "${{ steps.coord.outputs.artifact_bucket }}" \
+            --s3-key "${SERVICE}/${VERSION}.zip" --publish \
+            --query Version --output text | tee fn-version.txt
+          aws lambda wait function-updated --function-name "$FUNCTION"
+          aws lambda update-alias --function-name "$FUNCTION" --name "$ALIAS" \
+            --function-version "$(cat fn-version.txt)"
+
+      # =====================================================================
+      #  S3  -  sync a static bundle, invalidate CloudFront. Keep prior
+      #  versioned prefixes for rollback.
+      # =====================================================================
+      - name: Deploy static site to S3
+        if: needs.Preflight_Deploy.outputs.target == 's3'
+        shell: bash
+        env:
+          BUCKET: ${{ steps.coord.outputs.s3_bucket }}
+          DISTRIBUTION: ${{ steps.coord.outputs.s3_distribution }}
+          SOURCE_DIR: ${{ needs.Preflight_Deploy.outputs.s3_source_dir }}
+          CACHE_CONTROL: ${{ needs.Preflight_Deploy.outputs.s3_cache_control }}
+          INVALIDATE: ${{ needs.Preflight_Deploy.outputs.s3_invalidate_paths }}
+        run: |
+          set -euo pipefail
+          SRC="${SOURCE_DIR:-.}"
+          aws s3 sync "$SRC" "s3://${BUCKET}/${VERSION:-current}/" --delete \
+            ${CACHE_CONTROL:+--cache-control "$CACHE_CONTROL"}
+          aws s3 sync "s3://${BUCKET}/${VERSION:-current}/" "s3://${BUCKET}/live/" --delete
+          IFS=',' read -ra PATHS <<< "$INVALIDATE"
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" \
+            --paths "${PATHS[@]}"
+
+      # =====================================================================
+      #  Soak  -  hold the job open so a bad deploy is caught before the run
+      #  goes green (and, for prod promotion, before uat->prod proceeds).
+      # =====================================================================
+      - name: Soak
+        if: needs.Preflight_Deploy.outputs.bake_minutes != '0'
+        shell: bash
+        run: sleep "$(( ${{ needs.Preflight_Deploy.outputs.bake_minutes }} * 60 ))"
+
+      - name: Record deployed version
+        if: needs.Preflight_Deploy.outputs.version != ''
+        shell: bash
+        run: |
+          aws ssm put-parameter --name "$SSM_PREFIX/release/version" \
+            --type String --overwrite --value "$VERSION"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| service | $SERVICE |"
+            echo "| target | ${{ needs.Preflight_Deploy.outputs.target }} |"
+            echo "| environment | ${{ inputs.environment }} |"
+            echo "| version | ${VERSION:-latest} |"
+            echo "| strategy | ${{ needs.Preflight_Deploy.outputs.strategy }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
