@@ -36205,7 +36205,7 @@ void run();
 "use strict";
 
 // Path resolution specific to this action. Generic YAML + schema helpers live
-// in @aba/shared.
+// in @pipeline/shared.
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);

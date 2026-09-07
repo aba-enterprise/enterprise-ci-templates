@@ -31,7 +31,7 @@ on:
         default: ubuntu-latest
       environment:
         description: >
-          Deploy target whose service endpoints to resolve from
+          Target whose service endpoints to resolve from
           policy/pipeline-defaults.yml (environments.<name>). CI runs against
           non-prod tooling; production promotion passes 'prod'.
         type: string
@@ -47,7 +47,7 @@ jobs:
   #    pipeline-defaults.yml), schema-validates them, and emits typed outputs.
   # ---------------------------------------------------------------------------
   Preflight:
-    name: Preflight (config, policy & defaults constants)
+    name: Preflight
     runs-on: ${{ inputs.bootstrap-runner }}
     timeout-minutes: 5
     outputs:
@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Load config, policy and defaults
+      - name: Load config, policy and defaults constants
         id: parse
         uses: aba-enterprise/enterprise-ci-templates/actions/pipeline-config@feature-ciconfig
         with:
@@ -161,43 +161,34 @@ jobs:
         env: { CMD: "${{ needs.Preflight.outputs.test_cmd }}" }
         run: eval "$CMD"
 
-  #     # ===================== WINDOWS stages (powershell) =====================
-  #     - name: Restore dependencies (windows)
-  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.restore_cmd != ''
-  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
-  #       shell: powershell
-  #       env: { CMD: "${{ needs.Preflight.outputs.restore_cmd }}" }
-  #       run: Invoke-Expression $env:CMD
+      # ===================== WINDOWS stages (powershell) =====================
+      - name: Restore dependencies (windows)
+        if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.restore_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
+        shell: powershell
+        env: { CMD: "${{ needs.Preflight.outputs.restore_cmd }}" }
+        run: Invoke-Expression $env:CMD
 
-  #     - name: Lint (windows)
-  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.lint_cmd != ''
-  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
-  #       shell: powershell
-  #       env: { CMD: "${{ needs.Preflight.outputs.lint_cmd }}" }
-  #       run: Invoke-Expression $env:CMD
+      - name: Lint (windows)
+        if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.lint_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
+        shell: powershell
+        env: { CMD: "${{ needs.Preflight.outputs.lint_cmd }}" }
+        run: Invoke-Expression $env:CMD
 
-  #     - name: Build (windows)
-  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.build_cmd != ''
-  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
-  #       shell: powershell
-  #       env: { CMD: "${{ needs.Preflight.outputs.build_cmd }}" }
-  #       run: Invoke-Expression $env:CMD
+      - name: Build (windows)
+        if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.build_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
+        shell: powershell
+        env: { CMD: "${{ needs.Preflight.outputs.build_cmd }}" }
+        run: Invoke-Expression $env:CMD
 
-  #     - name: Test (windows)
-  #       if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.test_cmd != ''
-  #       working-directory: ${{ needs.Preflight.outputs.working_dir }}
-  #       shell: powershell
-  #       env: { CMD: "${{ needs.Preflight.outputs.test_cmd }}" }
-  #       run: Invoke-Expression $env:CMD
-
-  #     - name: Upload build artifact
-  #       if: needs.Preflight.outputs.artifact_path != ''
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: ${{ needs.Preflight.outputs.name }}-build
-  #         path: ${{ needs.Preflight.outputs.artifact_path }}
-  #         if-no-files-found: ignore
-  #         retention-days: 7
+      - name: Test (windows)
+        if: needs.Preflight.outputs.runner_os == 'windows' && needs.Preflight.outputs.test_cmd != ''
+        working-directory: ${{ needs.Preflight.outputs.working_dir }}
+        shell: powershell
+        env: { CMD: "${{ needs.Preflight.outputs.test_cmd }}" }
+        run: Invoke-Expression $env:CMD
 
   # # ---------------------------------------------------------------------------
   # # 3) security  -  secret scan, dependency review, SAST (CodeQL). Linux.

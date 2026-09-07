@@ -4,7 +4,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@aba/shared": ["shared/src/index.ts"]
+      "@pipeline/shared": ["shared/src/index.ts"]
     }
   },
   "include": ["shared/src", "pipeline-config/src"]

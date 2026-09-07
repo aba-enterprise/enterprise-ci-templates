@@ -1,5 +1,5 @@
 {
-  "name": "@aba-enterprise/actions",
+  "name": "@pipeline/actions",
   "version": "0.0.0",
   "private": true,
   "description": "Workspace root for the enterprise pipeline GitHub Actions.",

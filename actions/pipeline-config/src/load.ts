@@ -1,9 +1,9 @@
 // Path resolution specific to this action. Generic YAML + schema helpers live
-// in @aba/shared.
+// in @pipeline/shared.
 
 import * as path from "path";
 
-export { readYaml, validate } from "@aba/shared";
+export { readYaml, validate } from "@pipeline/shared";
 
 /**
  * The action ships with its own copy of policy/ (same repo). GITHUB_ACTION_PATH

@@ -1,5 +1,5 @@
 {
-  "name": "@aba/pipeline-config-action",
+  "name": "@pipeline/pipeline-config-action",
   "version": "1.0.0",
   "private": true,
   "description": "GitHub Action: merge per-app CI config with central pipeline policy + defaults into typed outputs.",
@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@aba/shared": "*"
+    "@pipeline/shared": "*"
   }
 }

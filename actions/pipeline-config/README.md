@@ -38,7 +38,7 @@ local testing. See [`action.yml`](action.yml) for the full output list.
 | `src/resolve.ts` | Pure resolution logic (no I/O). All gate/default rules. |
 | `src/resolve.test.ts` | Unit tests for the above. |
 | `src/config-schema.test.ts` | Contract tests for `policy/schema/config.schema.json`. |
-| `src/load.ts` | Path resolution; re-exports `readYaml`/`validate` from `@aba/shared`. |
+| `src/load.ts` | Path resolution; re-exports `readYaml`/`validate` from `@pipeline/shared`. |
 | `src/index.ts` | `@actions/core` glue: inputs → resolve → `setOutput` + job summary. |
 | `dist/` | `ncc` bundle — **committed**, executed by `runs.main`. |
 

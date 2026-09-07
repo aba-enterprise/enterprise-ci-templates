@@ -1,5 +1,5 @@
 {
-  "name": "@aba/shared",
+  "name": "@pipeline/shared",
   "version": "1.0.0",
   "private": true,
   "description": "Shared helpers for the enterprise pipeline actions (YAML load, JSON Schema validation).",
